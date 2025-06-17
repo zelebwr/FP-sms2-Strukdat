@@ -34,3 +34,12 @@ The program can dynamically determine the "optimal path" depending on the user's
 4. Transportation Type
 5. Transportation Class
 
+user A: line 30 - 33: 
+hai 
+ini 
+perubahan baru 
+
+user B: line 30 - 33: 
+ini perubahan
+ku 
+yang user B
