@@ -1,6 +1,11 @@
-asflakdsf alignasfaslfas
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <string>
+#include <map>
+using namespace std;
 
-asdflkjsadf
-asdflkdjsf
-asdflkjasdf
-aslfja __STDCPP_DEFAULT_NEW_ALIGNMENT__a
+
+int main(){
+    return 0;
+}
