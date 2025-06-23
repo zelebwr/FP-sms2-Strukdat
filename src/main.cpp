@@ -11,25 +11,52 @@
 #include <iomanip>
 #include <fstream>
 #include <sstream>
-#include <filesystem>
+#include <filesystem> // Required for file system operations
 
-// Added to remove the "std::" prefix from standard library components
+// Use standard namespace for cleaner code
 using namespace std;
 
-// Define M_PI if it's not defined by the cmath header on some compilers
+// Define M_PI if not available
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 // =================================================================================
-// 1. CORE DATA TYPES & FORWARD DECLARATIONS
+// 0. CLI STYLING (ASCII ART & COLORS)
 // =================================================================================
 
+namespace Color {
+    const string RED = "\033[1;31m";
+    const string GREEN = "\033[1;32m";
+    const string YELLOW = "\033[1;33m";
+    const string BLUE = "\033[1;34m";
+    const string MAGENTA = "\033[1;35m";
+    const string CYAN = "\033[1;36m";
+    const string WHITE = "\033[1;37m";
+    const string RESET = "\033[0m";
+}
+
+void cli_printHeader() {
+    cout << Color::CYAN << R"(
+ __  __     _     ____   _____ 
+|  \/  |   / \   |  _ \ / ____|
+| |\/| |  / _ \  | |_) | (___  
+| |  | | / ___ \ |  __/ \___ \ 
+|_|  |_|/_/   \_\|_|    |____/ 
+                               
+)" << Color::RESET;
+    cout << Color::CYAN << "\n================= M A P S =================" << Color::RESET << endl;
+    cout << Color::WHITE << "      Multi-Attribute Pathing System" << Color::RESET << endl;
+}
+
+
+// =================================================================================
+// 1. FORWARD DECLARATIONS & CORE DATA TYPES
+// =================================================================================
 class Location;
 class Route;
 class Graph;
 struct UserPreferences;
-struct TreeNode;
 class DecisionTree;
 class FileManager;
 
@@ -47,11 +74,13 @@ string transportTypeToString(TransportationType type) {
 }
 
 TransportationType stringToTransportType(const string& s) {
-    if (s == "TRAIN") return TransportationType::TRAIN;
-    if (s == "BUS") return TransportationType::BUS;
-    if (s == "BOAT") return TransportationType::BOAT;
-    if (s == "PLANE") return TransportationType::PLANE;
-    return TransportationType::ANY; // Default case
+    string upper_s = s;
+    transform(upper_s.begin(), upper_s.end(), upper_s.begin(), ::toupper);
+    if (upper_s == "TRAIN") return TransportationType::TRAIN;
+    if (upper_s == "BUS") return TransportationType::BUS;
+    if (upper_s == "BOAT") return TransportationType::BOAT;
+    if (upper_s == "PLANE") return TransportationType::PLANE;
+    return TransportationType::ANY;
 }
 
 struct UserPreferences {
@@ -71,121 +100,131 @@ struct GraphStats {
 // =================================================================================
 // 2. DECISION TREE IMPLEMENTATION
 // =================================================================================
-
 struct TreeNode {
-    string question; bool isLeaf = false; UserPreferences preferences;
-    // THE FIX - ALTERNATIVE: Using shared_ptr for the tree nodes as well for consistency.
+    string question;
+    bool isLeaf = false;
+    UserPreferences preferences;
     map<string, shared_ptr<TreeNode>> children;
-    TreeNode(string q) : question(move(q)) {} TreeNode(UserPreferences prefs) : isLeaf(true), preferences(move(prefs)) {}
+    TreeNode(string qu) : question(move(qu)) {}
+    TreeNode(UserPreferences pr) : isLeaf(true), preferences(move(pr)) {}
 };
 
 class DecisionTree {
 private:
     shared_ptr<TreeNode> root;
+
     void buildTree() {
-        auto budget=UserPreferences{"Budget Traveler",1.0,10.0,3.0}; auto balanced=UserPreferences{"Balanced Traveler",5.0,5.0,5.0}; auto business=UserPreferences{"Business Traveler",10.0,2.0,1.0};
+        auto budget = UserPreferences{"Budget Traveler", 1.0, 10.0, 3.0};
+        auto balanced = UserPreferences{"Balanced", 5.0, 5.0, 5.0};
+        auto business = UserPreferences{"Business", 10.0, 2.0, 1.0};
         root = make_shared<TreeNode>("What is your main priority?");
-        root->children["1. Fastest Time"]=make_shared<TreeNode>(business); root->children["2. Lowest Cost"]=make_shared<TreeNode>(budget); root->children["3. A Balanced Approach"]=make_shared<TreeNode>(balanced);
+        root->children["1. Fastest"] = make_shared<TreeNode>(business);
+        root->children["2. Cheapest"] = make_shared<TreeNode>(budget);
+        root->children["3. Balanced"] = make_shared<TreeNode>(balanced);
     }
-    void printTree(const shared_ptr<TreeNode>& n, int i) const { if(!n)return; for(int k=0;k<i;++k)cout<<"  "; if(n->isLeaf){cout<<"-> LEAF: "<<n->preferences.profileName<<"\n";}else{cout<<"Q: "<<n->question<<"\n"; for(const auto& p:n->children){for(int k=0;k<i;++k)cout<<"  "; cout<<"  ["<<p.first<<"]\n"; printTree(p.second,i+2);}}}
+
+    void printTree(const shared_ptr<TreeNode>& n, int i) const {
+        if (!n) return;
+        for (int k = 0; k < i; ++k) cout << "  ";
+        if (n->isLeaf) {
+            cout << "-> LEAF: " << n->preferences.profileName << "\n";
+        } else {
+            cout << "Q: " << n->question << "\n";
+            for (const auto& p : n->children) {
+                for (int k = 0; k < i; ++k) cout << "  ";
+                cout << "  [" << p.first << "]\n";
+                printTree(p.second, i + 2);
+            }
+        }
+    }
 
 public:
-    DecisionTree(){buildTree();}
-        UserPreferences run() const {
-        cout<<"\n--- Let's Find Your Travel Style! ---\n";
-        const TreeNode* currentNode = root.get();
+    DecisionTree() {
+        buildTree();
+    }
+
+    UserPreferences run() const {
+        cout << Color::YELLOW << "\n--- Determining Your Travel Style ---" << Color::RESET;
+        shared_ptr<const TreeNode> currentNode = root;
         string answer;
-
-        while(!currentNode->isLeaf){
-            cout<<"\nQ: "<<currentNode->question<<"\n";
-            for(const auto& p : currentNode->children){ cout<<"   "<<p.first<<"\n"; }
-            cout<<"Your choice: ";
-            cin>>answer;
-
-            // THE FIX: Instead of an exact match, find the key that STARTS WITH the user's answer.
-            string matchedKey = "";
-            for (const auto& pair : currentNode->children) {
-                // `rfind` checks if the key starts with the answer string.
-                if (pair.first.rfind(answer, 0) == 0) {
-                    matchedKey = pair.first;
+        while (!currentNode->isLeaf) {
+            cout << "\nQ: " << currentNode->question << "\n";
+            for (const auto& p : currentNode->children) {
+                cout << "   " << p.first << "\n";
+            }
+            cout << "Your choice: ";
+            cin >> answer;
+            string matchedKey;
+            for (const auto& p : currentNode->children) {
+                if (p.first.rfind(answer, 0) == 0) {
+                    matchedKey = p.first;
                     break;
                 }
             }
-            
             if (!matchedKey.empty()) {
-                currentNode = currentNode->children.at(matchedKey).get();
+                currentNode = currentNode->children.at(matchedKey);
             } else {
-                cout<<"Invalid choice, please try again.\n";
+                cout << Color::RED << "Invalid." << Color::RESET << "\n";
             }
         }
-        
         UserPreferences finalPrefs = currentNode->preferences;
-        cout<<"\nProfile set to: "<<finalPrefs.profileName<<"\n";
-        
-        // Applying the same fix for the second question
+        cout << Color::GREEN << "\nProfile set to: " << finalPrefs.profileName << Color::RESET << "\n";
         map<string, TransportationType> transportChoices = {
             {"1. Train", TransportationType::TRAIN},
             {"2. Bus", TransportationType::BUS},
             {"3. Plane", TransportationType::PLANE},
             {"4. Boat", TransportationType::BOAT},
-            {"5. Any (no preference)", TransportationType::ANY}
+            {"5. Any", TransportationType::ANY}
         };
-
         bool choiceMade = false;
         while (!choiceMade) {
             cout << "\nWhich mode of transport do you prefer?\n";
-            for (const auto& pair : transportChoices) {
-                cout << "   " << pair.first << endl;
+            for (const auto& p : transportChoices) {
+                cout << "   " << p.first << endl;
             }
             cout << "Your choice: ";
             cin >> answer;
-            
-            string matchedKey = "";
-            for (const auto& pair : transportChoices) {
-                if (pair.first.rfind(answer, 0) == 0) {
-                    matchedKey = pair.first;
+            string matchedKey;
+            for (const auto& p : transportChoices) {
+                if (p.first.rfind(answer, 0) == 0) {
+                    matchedKey = p.first;
                     break;
                 }
             }
-
             if (!matchedKey.empty()) {
                 finalPrefs.preferredTransport = transportChoices.at(matchedKey);
                 choiceMade = true;
             } else {
-                cout << "Invalid choice, please try again.\n";
+                cout << Color::RED << "Invalid." << Color::RESET << "\n";
             }
         }
-
-        cout << "Transportation preference set to: " << transportTypeToString(finalPrefs.preferredTransport) << endl;
-        
+        cout << Color::GREEN << "Transportation preference: " << transportTypeToString(finalPrefs.preferredTransport) << Color::RESET << endl;
         return finalPrefs;
     }
 
     void visualize() const {
-        cout<<"\n--- Decision Tree Structure ---\n"; 
-        printTree(root, 0); cout<<"-----------------------------\n";
+        cout << "\n--- Decision Tree ---\n";
+        printTree(root, 0);
+        cout << "-------------------\n";
     }
 };
-
 
 // =================================================================================
 // 3. GRAPH & ROUTING IMPLEMENTATION
 // =================================================================================
-
 class Location {
-private: 
-    int id; 
-    string name; 
-    double latitude; 
+private:
+    int id;
+    string name;
+    double latitude;
     double longitude;
-public: 
-    Location(int id=0, string name="N/A", double lat=0.0, double lon=0.0)
-        :id(id),name(name),latitude(lat),longitude(lon){}
-    int getId() const {return id;} 
-    string getName() const {return name;} 
-    double getLatitude() const {return latitude;} 
-    double getLongitude() const {return longitude;}
-    void update(string n, double lat, double lon){name=n; latitude=lat; longitude=lon;}
+public:
+    Location(int id = 0, string nm = "N/A", double lat = 0, double lon = 0) : id(id), name(nm), latitude(lat), longitude(lon) {}
+    int getId() const { return id; }
+    string getName() const { return name; }
+    double getLatitude() const { return latitude; }
+    double getLongitude() const { return longitude; }
+    void update(string nm, double lat, double lon) { name = nm; latitude = lat; longitude = lon; }
 };
 
 class Route {
@@ -197,10 +236,9 @@ protected:
     double cost;
     TransportationType type;
 public:
-    Route(Location* s, Location* d, double dist, double t, double c, TransportationType tp)
-        : source(s), destination(d), distance(dist), time(t), cost(c), type(tp) {}
+    Route(Location* sr, Location* de, double dis, double tim, double cos, TransportationType t) : source(sr), destination(de), distance(dis), time(tim), cost(cos), type(t) {}
     virtual ~Route() = default;
-    virtual double calculateWeight(const UserPreferences& p, const GraphStats& stats) const = 0;
+    virtual double calculateWeight(const UserPreferences& p, const GraphStats& s) const = 0;
     Location* getSource() const { return source; }
     Location* getDestination() const { return destination; }
     double getDistance() const { return distance; }
@@ -211,18 +249,16 @@ public:
 
 class ConcreteRoute : public Route {
 public:
-    ConcreteRoute(Location* s, Location* d, double dist, double t, double c, TransportationType tp)
-        : Route(s, d, dist, t, c, tp) {}
-
-    double calculateWeight(const UserPreferences& prefs, const GraphStats& stats) const override {
-        double normTime = time / stats.maxTime;
-        double normCost = cost / stats.maxCost;
-        double normDist = distance / stats.maxDistance;
-        double baseWeight = (normTime * prefs.timeWeight) + (normCost * prefs.costWeight) + (normDist * prefs.distanceWeight);
-        if (prefs.preferredTransport != TransportationType::ANY && this->type != prefs.preferredTransport) {
-            baseWeight += 1000.0;
+    ConcreteRoute(Location* s, Location* d, double di, double ti, double co, TransportationType ty) : Route(s, d, di, ti, co, ty) {}
+    double calculateWeight(const UserPreferences& p, const GraphStats& s) const override {
+        double nt = time / s.maxTime;
+        double nc = cost / s.maxCost;
+        double nd = distance / s.maxDistance;
+        double w = (nt * p.timeWeight) + (nc * p.costWeight) + (nd * p.distanceWeight);
+        if (p.preferredTransport != TransportationType::ANY && this->type != p.preferredTransport) {
+            w += 1000.0;
         }
-        return baseWeight;
+        return w;
     }
 };
 
@@ -234,16 +270,16 @@ private:
     int nextId = 1;
 
     double heuristic(const Location& a, const Location& b) const {
-        const double R=6371.0; 
-        double lat1=a.getLatitude()*M_PI/180.0; 
-        double lon1=a.getLongitude()*M_PI/180.0; 
-        double lat2=b.getLatitude()*M_PI/180.0; 
-        double lon2=b.getLongitude()*M_PI/180.0;
-        double dlon=lon2-lon1; 
-        double dlat=lat2-lat1; 
-        double val=pow(sin(dlat/2),2)+cos(lat1)*cos(lat2)*pow(sin(dlon/2),2); 
-        double c=2*asin(sqrt(val)); 
-        return R*c;
+        const double R = 6371;
+        double lat1 = a.getLatitude() * M_PI / 180.0;
+        double lon1 = a.getLongitude() * M_PI / 180.0;
+        double lat2 = b.getLatitude() * M_PI / 180.0;
+        double lon2 = b.getLongitude() * M_PI / 180.0;
+        double dlon = lon2 - lon1;
+        double dlat = lat2 - lat1;
+        double val = pow(sin(dlat / 2), 2) + cos(lat1) * cos(lat2) * pow(sin(dlon / 2), 2);
+        double c = 2 * asin(sqrt(val));
+        return R * c;
     }
 
     vector<shared_ptr<const Route>> reconstructPath(const map<int, int>& came_from, int currentId) const {
@@ -268,150 +304,145 @@ private:
     }
 
 public:
-    // No longer need to delete the copy constructor with shared_ptr
     Graph() = default;
 
-    // --- Getters for File Saving ---
     const map<int, Location>& getAllLocations() const { return locations; }
     const map<int, vector<shared_ptr<Route>>>& getAdjList() const { return adjList; }
 
-    // --- In-Memory CRUD Operations ---
-    int addLocation(const string& name, double lat, double lon) {
-        int id = nextId++; locations[id] = Location(id, name, lat, lon); adjList[id] = {}; return id;
+    int addLocation(const string& n, double la, double lo) {
+        int i = nextId++;
+        locations[i] = Location(i, n, la, lo);
+        adjList[i] = {};
+        return i;
     }
 
-    void addRoute(int srcId, int destId, double dist, double time, double cost, TransportationType type) {
-        if (!locations.count(srcId) || !locations.count(destId)) return;
-        if (type == TransportationType::ANY) {
-            throw runtime_error("Route must have a specific transport type."); 
+    void addRoute(int s, int d, double di, double ti, double co, TransportationType ty) {
+        if (!locations.count(s) || !locations.count(d)) return;
+        if (ty == TransportationType::ANY) {
+            throw runtime_error("Route must have a specific type.");
         }
-        adjList.at(srcId).push_back(make_shared<ConcreteRoute>(&locations.at(srcId), &locations.at(destId), dist, time, cost, type));
-        if(time > stats.maxTime) stats.maxTime = time;
-        if(cost > stats.maxCost) stats.maxCost = cost; 
-        if(dist > stats.maxDistance) stats.maxDistance = dist;
+        adjList.at(s).push_back(make_shared<ConcreteRoute>(&locations.at(s), &locations.at(d), di, ti, co, ty));
+        if (ti > stats.maxTime) stats.maxTime = ti;
+        if (co > stats.maxCost) stats.maxCost = co;
+        if (di > stats.maxDistance) stats.maxDistance = di;
     }
 
-    bool updateLocation(int id, const string& name, double lat, double lon) {
-        if (!locations.count(id)) return false;
-        locations.at(id).update(name, lat, lon); return true;
+    bool updateLocation(int i, const string& n, double la, double lo) {
+        if (!locations.count(i)) return false;
+        locations.at(i).update(n, la, lo);
+        return true;
     }
 
-    bool deleteRoute(int srcId, int destId) {
-        if (!adjList.count(srcId)) return false;
-        auto& routes = adjList.at(srcId);
-        auto original_size = routes.size();
-        routes.erase(remove_if(routes.begin(), routes.end(), [destId](const shared_ptr<Route>& r){
-            return r->getDestination()->getId() == destId;
-        }), routes.end());
-        return routes.size() < original_size;
+    bool deleteRoute(int s, int d) {
+        if (!adjList.count(s)) return false;
+        auto& rs = adjList.at(s);
+        auto oS = rs.size();
+        rs.erase(remove_if(rs.begin(), rs.end(), [d](const shared_ptr<Route>& r) {
+            return r->getDestination()->getId() == d;
+        }), rs.end());
+        return rs.size() < oS;
     }
 
-    bool deleteLocation(int id) {
-        if (!locations.count(id)) {
-            return false; // Return false if the location doesn't exist.
+    bool deleteLocation(int i) {
+        if (!locations.count(i)) return false;
+        locations.erase(i);
+        adjList.erase(i);
+        for (auto& p : adjList) {
+            auto& rs = p.second;
+            rs.erase(remove_if(rs.begin(), rs.end(), [i](const shared_ptr<Route>& r) {
+                return r->getDestination()->getId() == i;
+            }), rs.end());
         }
-        locations.erase(id); // Remove the location itself
-        adjList.erase(id); // Remove all routes starting from this location
-        // Remove all routes pointing to this location
-        for (auto& pair : adjList) {
-            auto& routes = pair.second;
-            routes.erase(remove_if(routes.begin(), routes.end(), [id](const shared_ptr<Route>& route) {
-                return route->getDestination()->getId() == id;
-            }), routes.end());
-        }
-        return true; // Return true to indicate success.
+        return true;
     }
 
     void printAllLocations() const {
         cout << "\n--- All Locations ---\n";
-        if (locations.empty()) { cout << "No locations loaded.\n"; }
-        else { for(const auto&p:locations){cout<<"ID: "<<p.first<<"\t-> " << p.second.getName()<<endl;} }
-        cout<<"---------------------\n";
+        if (locations.empty()) {
+            cout << "No locations loaded.\n";
+        } else {
+            for (const auto& p : locations) {
+                cout << "ID: " << p.first << "\t-> " << p.second.getName() << endl;
+            }
+        }
+        cout << "---------------------\n";
     }
-    
-    // --- Helper and Pathfinding Methods ---
+
+    // ##############################################################################
+    // #
+    // #   THE FIX FOR SHOWING ROUTE IDS IS HERE
+    // #
+    // #   This function now prints the source and destination IDs for clarity.
+    // #
     void printAllRoutes() const {
         cout << "\n--- All Loaded Routes ---\n";
         bool routesExist = false;
         for (const auto& pair : adjList) {
             if (!pair.second.empty()) {
                 routesExist = true;
-                cout << "FROM: " << locations.at(pair.first).getName() << endl;
-                for (const auto& route : pair.second) {
-                    cout << "  -> TO: " << left << setw(15) << route->getDestination()->getName()
-                         << " | BY: " << left << setw(7) << transportTypeToString(route->getType())
-                         << " | Time: " << route->getTime() << "m"
-                         << " | Cost: " << route->getCost() << "k"
-                         << " | Dist: " << route->getDistance() << "m" << endl;
-                }
-            }
-        }
-        if (!routesExist) { cout << "No routes loaded.\n"; }
-        cout << "------------------------\n";
-    }
-
-    void printAllRoutes() const {
-        cout << "\n--- All Routes ---\n";
-        bool routesExist = false;
-        for (const auto& pair : adjList) {
-            if (!pair.second.empty()) {
-                routesExist = true;
-                cout << "Routes from " << locations.at(pair.first).getName() << ":" << endl;
-                for (const auto& route : pair.second) {
-                    cout << "  -> To: " << route->getDestination()->getName()
-                         << " by " << transportTypeToString(route->getType())
-                         << " (Cost: " << route->getCost() << "k)" << endl;
+                cout << "FROM: " << pair.first << " (" << locations.at(pair.first).getName() << ")" << endl;
+                for (const auto& r : pair.second) {
+                    cout << "  -> TO: " << left << setw(4) << r->getDestination()->getId()
+                         << left << setw(15) << ("(" + r->getDestination()->getName() + ")")
+                         << " | BY: " << left << setw(7) << transportTypeToString(r->getType())
+                         << " | Time: " << r->getTime() << "m"
+                         << " | Cost: " << r->getCost() << "k"
+                         << " | Dist: " << r->getDistance() << "m" << endl;
                 }
             }
         }
         if (!routesExist) {
             cout << "No routes loaded.\n";
         }
-        cout << "--------------------\n";
+        cout << "------------------------\n";
+    }
+    // #
+    // ##############################################################################
+
+    bool isValidLocation(int i) const {
+        return locations.count(i);
     }
 
-    bool isValidLocation(int id) const { return locations.count(id); }
-
-    // MODIFIED: Returns a path object instead of just printing
-    vector<shared_ptr<const Route>> findShortestPath(int startId, int goalId, const UserPreferences& prefs) const {
-        using QueueElement = pair<double, int>;
-        priority_queue<QueueElement, vector<QueueElement>, greater<QueueElement>> openSet;
-        map<int, int> came_from; 
-        map<int, double> g_score;
-        for (const auto& pair : locations) { 
-            g_score[pair.first] = numeric_limits<double>::infinity(); 
+    vector<shared_ptr<const Route>> findShortestPath(int sI, int gI, const UserPreferences& pr) const {
+        using QE = pair<double, int>;
+        priority_queue<QE, vector<QE>, greater<QE>> o;
+        map<int, int> cf;
+        map<int, double> gs;
+        for (const auto& p : locations) {
+            gs[p.first] = numeric_limits<double>::infinity();
         }
-        g_score[startId] = 0;
-        openSet.push({heuristic(locations.at(startId), locations.at(goalId)), startId});
-        
-        cout << "\nSearching path for profile: " << prefs.profileName << " (" << transportTypeToString(prefs.preferredTransport) << " preferred)...\n";
-        
-        while (!openSet.empty()) {
-            int currentId = openSet.top().second; openSet.pop();
-            if (currentId == goalId) {
-                cout << "Path found!" << endl;
-                return reconstructPath(came_from, currentId);
+        gs[sI] = 0;
+        o.push({heuristic(locations.at(sI), locations.at(gI)), sI});
+        cout << "\nSearching...\n";
+        while (!o.empty()) {
+            int cI = o.top().second;
+            o.pop();
+            if (cI == gI) {
+                return reconstructPath(cf, cI);
             }
-            if (adjList.count(currentId)) {
-                for (const auto& route : adjList.at(currentId)) {
-                    int neighborId = route->getDestination()->getId();
-                    double tentative_g_score = g_score.at(currentId) + route->calculateWeight(prefs, stats);
-                    if (tentative_g_score < g_score.at(neighborId)) {
-                        came_from[neighborId] = currentId; g_score[neighborId] = tentative_g_score;
-                        double f_score = g_score.at(neighborId) + heuristic(locations.at(neighborId), locations.at(goalId));
-                        openSet.push({f_score, neighborId});
+            if (adjList.count(cI)) {
+                for (const auto& r : adjList.at(cI)) {
+                    int nI = r->getDestination()->getId();
+                    double tgs = gs.at(cI) + r->calculateWeight(pr, stats);
+                    if (tgs < gs.at(nI)) {
+                        cf[nI] = cI;
+                        gs[nI] = tgs;
+                        double fs = gs.at(nI) + heuristic(locations.at(nI), locations.at(gI));
+                        o.push({fs, nI});
                     }
                 }
             }
         }
-        cout << "No path found from " << locations.at(startId).getName() << " to " << locations.at(goalId).getName() << ".\n";
-        return {}; // Return an empty vector if no path is found
+        cout << Color::RED << "No path found from " << locations.at(sI).getName() << " to " << locations.at(gI).getName() << Color::RESET << ".\n";
+        return {};
     }
 };
 
+// =================================================================================
+// 4. FILE MANAGER CLASS
+// =================================================================================
 class FileManager {
 private:
-    // Define directory paths
     const filesystem::path inputDir = "../input";
     const filesystem::path locationsDir = inputDir / "locations";
     const filesystem::path routesDir = inputDir / "routes";
@@ -433,244 +464,268 @@ public:
 
     void loadAllData(Graph& g) const {
         cout << "\n--- Loading All Input Data ---\n";
-        for (const auto& entry : filesystem::directory_iterator(locationsDir)) {
-            string filename = entry.path().string();
-            ifstream f(filename); 
-            if(!f.is_open()) continue;
-            string l; getline(f,l);
-            while(getline(f,l)){
-                stringstream ss(l);
-                string i,n,la,lo;
-                getline(ss,i,';');
-                getline(ss,n,';');
-                getline(ss,la,';');
-                getline(ss,lo,';');
-                if(!n.empty()){
-                    g.addLocation(n,stod(la),stod(lo));
+        if (filesystem::exists(locationsDir)) {
+            for (const auto& entry : filesystem::directory_iterator(locationsDir)) {
+                string path = entry.path().string();
+                ifstream file(path);
+                if (!file.is_open()) continue;
+                string line;
+                getline(file, line); // Skip header
+                while (getline(file, line)) {
+                    stringstream ss(line);
+                    string id, name, lat, lon;
+                    getline(ss, id, ';'); getline(ss, name, ';'); getline(ss, lat, ';'); getline(ss, lon, ';');
+                    if (!name.empty()) { g.addLocation(name, stod(lat), stod(lon)); }
                 }
+                cout << "Loaded locations from " << path << endl;
             }
-            cout << "Loaded locations from " << filename << endl;
         }
-        for (const auto& entry : filesystem::directory_iterator(routesDir)) {
-            string filename = entry.path().string();
-            ifstream f(filename); 
-            if(!f.is_open()) continue; 
-            string l; 
-            getline(f,l);
-            while(getline(f,l)){
-                stringstream ss(l);
-                string s,d,di,ti,c,ty;
-                getline(ss,s,';');
-                getline(ss,d,';');
-                getline(ss,di,';');
-                getline(ss,ti,';');
-                getline(ss,c,';');
-                getline(ss,ty,';');
-                if(!s.empty()){
-                    g.addRoute(stoi(s),stoi(d),stod(di),stod(ti),stod(c),stringToTransportType(ty));
+        if (filesystem::exists(routesDir)) {
+            for (const auto& entry : filesystem::directory_iterator(routesDir)) {
+                string path = entry.path().string();
+                ifstream file(path);
+                if (!file.is_open()) continue;
+                string line;
+                getline(file, line); // Skip header
+                while (getline(file, line)) {
+                    stringstream ss(line);
+                    string src, dest, dist, time, cost, type;
+                    getline(ss, src, ';'); getline(ss, dest, ';'); getline(ss, dist, ';'); getline(ss, time, ';'); getline(ss, cost, ';'); getline(ss, type, ';');
+                    if (!src.empty()) { g.addRoute(stoi(src), stoi(dest), stod(dist), stod(time), stod(cost), stringToTransportType(type));}
                 }
+                cout << "Loaded routes from " << path << endl;
             }
-            cout << "Loaded routes from " << filename << endl;
         }
         cout << "----------------------------\n";
     }
 
-    void saveLocationsToCSV(const Graph& g, const string& filename) const {
-        ofstream file(locationsDir / filename); // Save to locations subdirectory
+    void saveLocationsToCSV(const Graph& g, const string& f) const {
+        ofstream file(locationsDir / f);
         file << "id;name;latitude;longitude\n";
-        for(const auto&[i,l]:g.getAllLocations()){
-            file<<i<<";"<<l.getName()<<";"<<fixed<<setprecision(4)<<l.getLatitude()<<";"<<l.getLongitude()<<"\n";
+        for (const auto& [id, loc] : g.getAllLocations()) {
+            file << id << ";" << loc.getName() << ";" << fixed << setprecision(4) << loc.getLatitude() << ";" << loc.getLongitude() << "\n";
         }
-        cout << "Locations saved to " << (locationsDir / filename).string() << endl;
+        cout << Color::GREEN << "Locations saved to " << (locationsDir / f).string() << Color::RESET << endl;
     }
-    
-    void saveRoutesToCSV(const Graph& g, const string& filename) const {
-        ofstream file(routesDir / filename); // Save to routes subdirectory
+
+    void saveRoutesToCSV(const Graph& g, const string& f) const {
+        ofstream file(routesDir / f);
         file << "source_id;dest_id;distance_m;time_min;cost_k_rp;type\n";
-        for(const auto&[fid,rs]:g.getAdjList()){
-            for(const auto& r:rs){
-                file<<fid<<";"<<r->getDestination()->getId()<<";"<<r->getDistance()<<";"<<r->getTime()<<";"<<r->getCost()<<";"<<transportTypeToString(r->getType())<<"\n";
+        for (const auto& [fromId, routes] : g.getAdjList()) {
+            for (const auto& r : routes) {
+                file << fromId << ";" << r->getDestination()->getId() << ";" << r->getDistance() << ";" << r->getTime() << ";" << r->getCost() << ";" << transportTypeToString(r->getType()) << "\n";
             }
         }
-        cout << "Routes saved to " << (routesDir / filename).string() << endl;
+        cout << Color::GREEN << "Routes saved to " << (routesDir / f).string() << Color::RESET << endl;
     }
     
-    string formatTxtOutput(const vector<shared_ptr<const Route>>& p) const {
-        if(p.empty()) return"No path.";
-        stringstream s;double tT=0,tC=0,tD=0;s<<"========================================\n";
-        s<<"      R E C O M M E N D E D   R O U T E\n";s<<"========================================\n";
-        s<<"From: "<<p.front()->getSource()->getName()<<"\n";
-        s<<"To:   "<<p.back()->getDestination()->getName()<<"\n\n";
-        s<<"--- Steps ---\n";
-        for(size_t i=0;i<p.size();++i){
-            const auto& r=p[i];
-            s<<"  "<<i+1<<". From "<<r->getSource()->getName()<<" to "<<r->getDestination()->getName()<<" by "<<transportTypeToString(r->getType())<<"\n     (Time: "<<r->getTime()<<"m, Cost: "<<r->getCost()<<"k, Dist: "<<r->getDistance()<<"m)\n";
-            tT+=r->getTime();
-            tC+=r->getCost();
-            tD+=r->getDistance();
+    // This version is for the colorful console output
+    string formatTxtOutputForConsole(const vector<shared_ptr<const Route>>& p) const {
+        if (p.empty()) return "No path.";
+        stringstream s;
+        double tT = 0, tC = 0, tD = 0;
+        s << Color::CYAN << "========================================\n";
+        s << "      R E C O M M E N D E D   R O U T E\n";
+        s << "========================================\n" << Color::RESET;
+        s << Color::WHITE << "From: " << p.front()->getSource()->getName() << "\n" << "To:   " << p.back()->getDestination()->getName() << "\n\n" << Color::YELLOW << "--- Steps ---\n" << Color::RESET;
+        for (size_t i = 0; i < p.size(); ++i) {
+            const auto& r = p[i];
+            s << "  " << i + 1 << ". From " << r->getSource()->getName() << " to " << r->getDestination()->getName() << " by " << transportTypeToString(r->getType()) << "\n     (Time: " << r->getTime() << "m, Cost: " << r->getCost() << "k, Dist: " << r->getDistance() << "m)\n";
+            tT += r->getTime(); tC += r->getCost(); tD += r->getDistance();
         }
-        s<<"\n--- Summary ---\n";
-        s<<"  Total Time:     "<<tT<<" min\n";
-        s<<"  Total Distance: "<<tD<<" m\n";
-        s<<"  Total Cost:     Rp "<<fixed<<setprecision(3)<<(tC*1000)<<"\n";
-        s<<"========================================\n";
+        s << Color::YELLOW << "\n--- Summary ---\n" << Color::RESET;
+        s << "  Total Time:     " << tT << " min\n";
+        s << "  Total Distance: " << tD << " m\n";
+        s << "  Total Cost:     Rp " << fixed << setprecision(3) << (tC * 1000) << "\n";
+        s << Color::CYAN << "========================================\n" << Color::RESET;
         return s.str();
     }
+    
+    // ##############################################################################
+    // #
+    // #   THE FIX FOR THE FILE OUTPUT IS HERE
+    // #
+    // #   This new function creates a plain text string with NO color codes,
+    // #   making it suitable for saving to a .txt file.
+    // #
+    string formatTxtOutputForFile(const vector<shared_ptr<const Route>>& p) const {
+        if (p.empty()) return "No path.";
+        stringstream s;
+        double tT = 0, tC = 0, tD = 0;
+        s << "========================================\n";
+        s << "      R E C O M M E N D E D   R O U T E\n";
+        s << "========================================\n";
+        s << "From: " << p.front()->getSource()->getName() << "\n" << "To:   " << p.back()->getDestination()->getName() << "\n\n" << "--- Steps ---\n";
+        for (size_t i = 0; i < p.size(); ++i) {
+            const auto& r = p[i];
+            s << "  " << i + 1 << ". From " << r->getSource()->getName() << " to " << r->getDestination()->getName() << " by " << transportTypeToString(r->getType()) << "\n     (Time: " << r->getTime() << "m, Cost: " << r->getCost() << "k, Dist: " << r->getDistance() << "m)\n";
+            tT += r->getTime(); tC += r->getCost(); tD += r->getDistance();
+        }
+        s << "\n--- Summary ---\n";
+        s << "  Total Time:     " << tT << " min\n";
+        s << "  Total Distance: " << tD << " m\n";
+        s << "  Total Cost:     Rp " << fixed << setprecision(3) << (tC * 1000) << "\n";
+        s << "========================================\n";
+        return s.str();
+    }
+    // #
+    // ##############################################################################
+
     string formatCsvOutput(const vector<shared_ptr<const Route>>& p) const {
         stringstream s;
-        s<<"start_location_id,start_location_name,end_location_id,end_location_name,transport_type,time_minutes,cost_k_rp,distance_meters\n";
-        for(const auto& r:p){
-            s<<r->getSource()->getId()<<","<<r->getSource()->getName()<<","<<r->getDestination()->getId()<<","<<r->getDestination()->getName()<<","<<transportTypeToString(r->getType())<<","<<r->getTime()<<","<<r->getCost()<<","<<r->getDistance()<<"\n";
+        s << "start_id,start_name,end_id,end_name,type,time,cost,dist\n";
+        for (const auto& r : p) {
+            s << r->getSource()->getId() << "," << r->getSource()->getName() << "," << r->getDestination()->getId() << "," << r->getDestination()->getName() << "," << transportTypeToString(r->getType()) << "," << r->getTime() << "," << r->getCost() << "," << r->getDistance() << "\n";
         }
         return s.str();
     }
-    
-    void saveOutput(const string& baseFilename, const string& txtContent, const string& csvContent, bool append = false) const {
-        filesystem::path txtFile = txtDir / (baseFilename + ".txt");
-        filesystem::path csvFile = csvDir / (baseFilename + ".csv");
-        ofstream txt_ofs, csv_ofs;
-        if(append){txt_ofs.open(txtFile,ios_base::app); csv_ofs.open(csvFile,ios_base::app);}
-        else{txt_ofs.open(txtFile); csv_ofs.open(csvFile);}
-        txt_ofs << txtContent << "\n";
-        csv_ofs << csvContent;
-        cout<<"Saved output to "<<txtFile.string()<<" and "<<csvFile.string()<<endl;
+
+    void saveOutput(const string& b, const string& t, const string& c, bool a = false) const {
+        filesystem::path tf = txtDir / (b + ".txt");
+        filesystem::path cf = csvDir / (b + ".csv");
+        ofstream tO, cO;
+        if (a) {
+            tO.open(tf, ios_base::app);
+            cO.open(cf, ios_base::app);
+        } else {
+            tO.open(tf);
+            cO.open(cf);
+        }
+        tO << t << "\n";
+        cO << c;
+        cout << Color::GREEN << "Saved output to " << tf.string() << " and " << cf.string() << Color::RESET << endl;
     }
 
-    void listFiles(const string& type) const {
-        filesystem::path dir_to_list;
-        if (type == "input_locations") dir_to_list = locationsDir;
-        else if (type == "input_routes") dir_to_list = routesDir;
-        else if (type == "output_txt") dir_to_list = txtDir;
-        else if (type == "output_csv") dir_to_list = csvDir;
-        else { cout << "Invalid file type to list." << endl; return; }
-
-        cout << "\n--- Available Files in " << dir_to_list.string() << " ---\n";
-        for(const auto& e:filesystem::directory_iterator(dir_to_list)){cout<<"- "<<e.path().filename().string()<<endl;}
-        cout << "---------------------------\n";
+    void listFiles(const string& t) const {
+        filesystem::path d;
+        if (t == "input_locations") d = locationsDir;
+        else if (t == "input_routes") d = routesDir;
+        else if (t == "output_txt") d = txtDir;
+        else if (t == "output_csv") d = csvDir;
+        else {
+            cout << Color::RED << "Invalid type." << Color::RESET << endl;
+            return;
+        }
+        cout << "\n--- Files in " << d.string() << " ---\n";
+        for (const auto& e : filesystem::directory_iterator(d)) {
+            cout << "- " << e.path().filename().string() << endl;
+        }
+        cout << "-----------------------\n";
     }
 
     void deleteFile() const {
-        string type, fn;
-        cout << "What type of file to delete? (input_locations, input_routes, output_txt, output_csv): "; cin >> type;
-        listFiles(type);
-        cout << "Enter exact filename to delete: "; cin >> fn;
-        filesystem::path path_to_delete;
-        if (type == "input_locations") path_to_delete = locationsDir / fn;
-        else if (type == "input_routes") path_to_delete = routesDir / fn;
-        else if (type == "output_txt") path_to_delete = txtDir / fn;
-        else if (type == "output_csv") path_to_delete = csvDir / fn;
-        else { cout << "Invalid file type." << endl; return; }
-
-        if(filesystem::remove(path_to_delete)){cout<<"Deleted "<<path_to_delete.string()<<endl;}
-        else{cerr<<"Error deleting "<<path_to_delete.string()<<endl;}
+        string t, f;
+        cout << "Type to delete? (input_locations, input_routes, output_txt, output_csv): ";
+        cin >> t;
+        listFiles(t);
+        cout << "Filename to delete: ";
+        cin >> f;
+        filesystem::path p;
+        if (t == "input_locations") p = locationsDir / f;
+        else if (t == "input_routes") p = routesDir / f;
+        else if (t == "output_txt") p = txtDir / f;
+        else if (t == "output_csv") p = csvDir / f;
+        else {
+            cout << Color::RED << "Invalid type." << Color::RESET << endl;
+            return;
+        }
+        if (filesystem::remove(p)) {
+            cout << Color::GREEN << "Deleted " << p.string() << Color::RESET << endl;
+        } else {
+            cerr << Color::RED << "Error deleting " << p.string() << Color::RESET << endl;
+        }
     }
 };
 
-void cli_addLocation(Graph& g) {
-    string name; double lat, lon;
-    cout << "Enter new location name: "; cin.ignore(); getline(cin, name);
-    cout << "Enter latitude: "; cin >> lat;
-    cout << "Enter longitude: "; cin >> lon;
-    g.addLocation(name, lat, lon);
-    cout << "Location '" << name << "' added successfully." << endl;
+// =================================================================================
+// 5. CLI HELPER FUNCTIONS
+// =================================================================================
+void cli_addLocation(Graph& g) { /* ... same as before ... */
+    string n; double la, lo; cout << "Name: "; cin.ignore(); getline(cin, n); cout << "Lat: "; cin >> la; cout << "Lon: "; cin >> lo;
+    g.addLocation(n, la, lo); cout << Color::GREEN << "Added." << Color::RESET << "\n";
 }
-
-void cli_deleteLocation(Graph& g) {
-    g.printAllLocations();
-    cout << "Enter ID of location to delete: ";
-    int id; cin >> id;
-    if (g.deleteLocation(id)) {
-        cout << "Location deleted successfully." << endl;
-    } else {
-        cout << "Invalid ID." << endl;
-    }
+void cli_deleteLocation(Graph& g) { /* ... same as before ... */
+    g.printAllLocations(); cout << "ID to delete: "; int i; cin >> i;
+    if (g.deleteLocation(i)) { cout << Color::GREEN << "Deleted." << Color::RESET << "\n"; }
+    else { cout << Color::RED << "Invalid ID." << Color::RESET << "\n"; }
 }
-
-void cli_updateLocation(Graph& g) {
-    g.printAllLocations(); int id;
-    cout << "Enter ID of location to update: "; cin >> id;
-    if (!g.isValidLocation(id)) { cout << "Invalid ID.\n"; return; }
-    string name; double lat, lon;
-    cout << "Enter new name: "; cin.ignore(); getline(cin, name);
-    cout << "Enter new latitude: "; cin >> lat;
-    cout << "Enter new longitude: "; cin >> lon;
-    if (g.updateLocation(id, name, lat, lon)) {
-        cout << "Location updated successfully." << endl;
-    }
+void cli_updateLocation(Graph& g) { /* ... same as before ... */
+    g.printAllLocations(); int i; cout << "ID to update: "; cin >> i; if (!g.isValidLocation(i)) { cout << Color::RED << "Invalid ID.\n" << Color::RESET; return; }
+    string n; double la, lo; cout << "New name: "; cin.ignore(); getline(cin, n); cout << "New lat: "; cin >> la; cout << "New lon: "; cin >> lo;
+    if (g.updateLocation(i, n, la, lo)) { cout << Color::GREEN << "Updated." << Color::RESET << "\n"; }
 }
-
-void cli_addRoute(Graph& g) {
-    g.printAllLocations();
-    int srcId, destId;
-    cout << "Enter source location ID: "; cin >> srcId;
-    cout << "Enter destination location ID: "; cin >> destId;
-    double dist, time, cost;
-    cout << "Enter distance (meters): "; cin >> dist;
-    cout << "Enter time (minutes): "; cin >> time;
-    cout << "Enter cost (Thousand Rupiah): "; cin >> cost;
-    cout << "Enter type (TRAIN, BUS, etc.): "; string typeStr; cin >> typeStr;
-    g.addRoute(srcId, destId, dist, time, cost, stringToTransportType(typeStr));
-    cout << "Route added." << endl;
+void cli_addRoute(Graph& g) { /* ... same as before ... */
+    g.printAllLocations(); int s, d; cout << "Src ID: "; cin >> s; cout << "Dest ID: "; cin >> d;
+    double di, ti, c; cout << "Dist (m): "; cin >> di; cout << "Time (m): "; cin >> ti; cout << "Cost (kRp): "; cin >> c;
+    cout << "Type: "; string ts; cin >> ts; g.addRoute(s, d, di, ti, c, stringToTransportType(ts));
+    cout << Color::GREEN << "Route added." << Color::RESET << "\n";
 }
-
-void cli_deleteRoute(Graph& g) {
-    g.printAllLocations();
-    int srcId, destId;
-    cout << "Enter source location ID for route to delete: "; cin >> srcId;
-    cout << "Enter destination location ID for route to delete: "; cin >> destId;
-    if (g.deleteRoute(srcId, destId)) {
-        cout << "Route deleted successfully." << endl;
-    } else {
-        cout << "Route not found." << endl;
-    }
+void cli_deleteRoute(Graph& g) { /* ... same as before ... */
+    g.printAllLocations(); int s, d; cout << "Src ID: "; cin >> s; cout << "Dest ID: "; cin >> d;
+    if (g.deleteRoute(s, d)) { cout << Color::GREEN << "Route deleted." << Color::RESET << "\n"; }
+    else { cout << Color::RED << "Not found." << Color::RESET << "\n"; }
 }
-
-void cli_showRecommendedPaths(const vector<vector<shared_ptr<const Route>>>& history, const FileManager& fm) {
+void cli_showRecommendedPaths(const vector<vector<shared_ptr<const Route>>>& h, const FileManager& f) {
     cout << "\n--- Recommended Path History ---\n";
-    if (history.empty()) {
-        cout << "No recommendations have been made yet in this session.\n";
+    if (h.empty()) {
+        cout << "No recommendations in this session.\n";
     } else {
-        for (size_t i = 0; i < history.size(); ++i) {
+        for (size_t i = 0; i < h.size(); ++i) {
             cout << "--- History Item #" << i + 1 << " ---\n";
-            cout << fm.formatTxtOutput(history[i]);
+            cout << f.formatTxtOutputForConsole(h[i]);
         }
     }
     cout << "--------------------------------\n";
 }
 
-// =================================================================================
-// 4. MAIN PROGRAM FLOW
-// =================================================================================
+void cli_printMenu() { /* ... same as before ... */
+    cout << Color::YELLOW << "\n=============== MAIN MENU ===============\n" << Color::RESET
+         << Color::WHITE << "Locations & Routes:\n" << Color::RESET
+         << Color::GREEN << "  1. " << Color::WHITE << "Show All Locations\n"
+         << Color::GREEN << "  2. " << Color::WHITE << "Show All Routes\n"
+         << Color::GREEN << "  3. " << Color::WHITE << "Add Location\n"
+         << Color::GREEN << "  4. " << Color::WHITE << "Update Location\n"
+         << Color::GREEN << "  5. " << Color::WHITE << "Delete Location\n"
+         << Color::GREEN << "  6. " << Color::WHITE << "Add Route\n"
+         << Color::GREEN << "  7. " << Color::WHITE << "Delete Route\n"
+         << Color::WHITE << "\nPathfinding & Saving:\n" << Color::RESET
+         << Color::GREEN << "  8. " << Color::WHITE << "Recommend a Path\n"
+         << Color::GREEN << "  9. " << Color::WHITE << "Show Recommended Path History\n"
+         << Color::GREEN << "  10. " << Color::WHITE << "Save LAST Recommended Path\n"
+         << Color::GREEN << "  11. " << Color::WHITE << "Save ALL Recommended Paths\n"
+         << Color::WHITE << "\nFile Management:\n" << Color::RESET
+         << Color::GREEN << "  12. " << Color::WHITE << "Save Current Graph Data to File\n"
+         << Color::GREEN << "  13. " << Color::WHITE << "Delete a File\n"
+         << Color::RED << "\n  0. Exit\n" << Color::RESET
+         << Color::YELLOW << "=========================================\n" << Color::RESET
+         << Color::MAGENTA << "Enter your choice: " << Color::RESET;
+}
 
+// =================================================================================
+// 6. MAIN PROGRAM FLOW (CLI)
+// =================================================================================
 int main() {
+    FileManager fileManager;
     Graph transportationSystem;
     DecisionTree preferenceFinder;
-    FileManager fileManager;
-
     vector<vector<shared_ptr<const Route>>> pathHistory;
+
+    cli_printHeader();
 
     try {
         fileManager.loadAllData(transportationSystem);
-        
+
         int choice = -1;
-        while(choice != 0) {
-            cout << "\n=============== MAIN MENU ===============\n"
-                 << "Locations & Routes:\n"
-                 << "  1. Show All Locations\n" << "  2. Show All Routes\n" << "  3. Add Location\n"
-                 << "  4. Update Location\n" << "  5. Delete Location\n" << "  6. Add Route\n"
-                 << "  7. Delete Route\n"
-                 << "\nPathfinding & Saving:\n"
-                 << "  8. Recommend a Path\n" << "  9. Show Recommended Path History\n" << "  10. Save LAST Recommended Path\n"
-                 << "  11. Save ALL Recommended Paths\n"
-                 << "\nFile Management:\n"
-                 << "  12. Save Current Graph Data to File\n" << "  13. Delete a File\n"
-                 << "\n0. Exit\n" << "=========================================\n" << "Enter your choice: ";
+        while (choice != 0) {
+            cli_printMenu();
             cin >> choice;
             if (cin.fail()) {
-                cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); choice = -1;
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                choice = -1;
             }
 
-            switch(choice) {
+            switch (choice) {
                 case 1: transportationSystem.printAllLocations(); break;
                 case 2: transportationSystem.printAllRoutes(); break;
                 case 3: cli_addLocation(transportationSystem); break;
@@ -681,35 +736,66 @@ int main() {
                 case 8: {
                     UserPreferences prefs = preferenceFinder.run();
                     transportationSystem.printAllLocations();
-                    int startId=0, goalId=0; cout << "Enter Start ID: "; cin >> startId; cout << "Enter Goal ID: "; cin >> goalId;
-                    if(transportationSystem.isValidLocation(startId) && transportationSystem.isValidLocation(goalId)) {
+                    int startId = 0, goalId = 0;
+                    cout << "Enter Start ID: "; cin >> startId;
+                    cout << "Enter Goal ID: "; cin >> goalId;
+                    if (transportationSystem.isValidLocation(startId) && transportationSystem.isValidLocation(goalId)) {
                         vector<shared_ptr<const Route>> path = transportationSystem.findShortestPath(startId, goalId, prefs);
-                        if (!path.empty()) { pathHistory.push_back(path); cout << fileManager.formatTxtOutput(path); }
-                    } else { cout << "Invalid location ID(s).\n"; }
+                        if (!path.empty()) {
+                            pathHistory.push_back(path);
+                            cout << fileManager.formatTxtOutputForConsole(path);
+                        }
+                    } else {
+                        cout << Color::RED << "Invalid location ID(s).\n" << Color::RESET;
+                    }
                     break;
                 }
                 case 9: cli_showRecommendedPaths(pathHistory, fileManager); break;
                 case 10: {
-                    if(pathHistory.empty()){cout<<"No path recommended yet.\n";}else{string f="output_last";fileManager.saveOutput(f,fileManager.formatTxtOutput(pathHistory.back()),fileManager.formatCsvOutput(pathHistory.back()));}
+                    if (pathHistory.empty()) {
+                        cout << Color::YELLOW << "No path recommended yet.\n" << Color::RESET;
+                    } else {
+                        string f = "output_last";
+                        // Using the correct formatter for each file type
+                        fileManager.saveOutput(f, fileManager.formatTxtOutputForFile(pathHistory.back()), fileManager.formatCsvOutput(pathHistory.back()));
+                    }
                     break;
                 }
                 case 11: {
-                    if(pathHistory.empty()){cout<<"No paths recommended yet.\n";}else{string f;cout<<"Base name for files: ";cin>>f;stringstream t,c;for(const auto&p:pathHistory){t<<fileManager.formatTxtOutput(p);c<<fileManager.formatCsvOutput(p);}fileManager.saveOutput(f,t.str(),c.str());}
+                    if (pathHistory.empty()) {
+                        cout << Color::YELLOW << "No paths recommended yet.\n" << Color::RESET;
+                    } else {
+                        string f;
+                        cout << "Base name for files: ";
+                        cin >> f;
+                        stringstream t, c;
+                        for (const auto& p : pathHistory) {
+                            t << fileManager.formatTxtOutputForFile(p); // Use file-safe formatter
+                            c << fileManager.formatCsvOutput(p);
+                        }
+                        fileManager.saveOutput(f, t.str(), c.str());
+                    }
                     break;
                 }
                 case 12: {
-                     fileManager.saveLocationsToCSV(transportationSystem, "input_locations_saved.csv");
-                     fileManager.saveRoutesToCSV(transportationSystem, "input_routes_saved.csv");
-                     break;
+                    fileManager.saveLocationsToCSV(transportationSystem, "input_locations_saved.csv");
+                    fileManager.saveRoutesToCSV(transportationSystem, "input_routes_saved.csv");
+                    break;
                 }
-                case 13: fileManager.deleteFile(); break;
-                case 0: cout << "Exiting program. Goodbye!" << endl; break;
-                default: cout << "Invalid choice. Please try again." << endl; break;
+                case 13:
+                    fileManager.deleteFile();
+                    break;
+                case 0:
+                    cout << Color::CYAN << "Exiting program. Goodbye!" << Color::RESET << endl;
+                    break;
+                default:
+                    cout << Color::RED << "Invalid choice. Please try again." << Color::RESET << endl;
+                    break;
             }
         }
 
     } catch (const exception& e) {
-        cerr << "A critical error occurred: " << e.what() << endl;
+        cerr << Color::RED << "A critical error occurred: " << e.what() << Color::RESET << endl;
         return 1;
     }
     return 0;
