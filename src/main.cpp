@@ -79,9 +79,9 @@ private:
 
 public:
     DecisionTree(){buildTree();}
-    UserPreferences run() const {
+        UserPreferences run() const {
         cout<<"\n--- Let's Find Your Travel Style! ---\n";
-        shared_ptr<const TreeNode> currentNode = root;
+        const TreeNode* currentNode = root.get();
         string answer;
 
         while(!currentNode->isLeaf){
@@ -89,31 +89,70 @@ public:
             for(const auto& p : currentNode->children){ cout<<"   "<<p.first<<"\n"; }
             cout<<"Your choice: ";
             cin>>answer;
-            if(currentNode->children.count(answer)){ currentNode = currentNode->children.at(answer); }
-            else{ cout<<"Invalid choice, try again.\n"; }
+
+            // THE FIX: Instead of an exact match, find the key that STARTS WITH the user's answer.
+            string matchedKey = "";
+            for (const auto& pair : currentNode->children) {
+                // `rfind` checks if the key starts with the answer string.
+                if (pair.first.rfind(answer, 0) == 0) {
+                    matchedKey = pair.first;
+                    break;
+                }
+            }
+            
+            if (!matchedKey.empty()) {
+                currentNode = currentNode->children.at(matchedKey).get();
+            } else {
+                cout<<"Invalid choice, please try again.\n";
+            }
         }
         
         UserPreferences finalPrefs = currentNode->preferences;
         cout<<"\nProfile set to: "<<finalPrefs.profileName<<"\n";
+        
+        // Applying the same fix for the second question
+        map<string, TransportationType> transportChoices = {
+            {"1. Train", TransportationType::TRAIN},
+            {"2. Bus", TransportationType::BUS},
+            {"3. Plane", TransportationType::PLANE},
+            {"4. Boat", TransportationType::BOAT},
+            {"5. Any (no preference)", TransportationType::ANY}
+        };
 
-        cout << "\nWhich mode of transport do you prefer?\n";
-        cout << "1. Train\n";
-        cout << "2. Bus\n";
-        cout << "3. Plane\n";
-        cout << "4. Any (no preference)\n";
-        cout << "Your choice: ";
-        cin >> answer;
+        bool choiceMade = false;
+        while (!choiceMade) {
+            cout << "\nWhich mode of transport do you prefer?\n";
+            for (const auto& pair : transportChoices) {
+                cout << "   " << pair.first << endl;
+            }
+            cout << "Your choice: ";
+            cin >> answer;
+            
+            string matchedKey = "";
+            for (const auto& pair : transportChoices) {
+                if (pair.first.rfind(answer, 0) == 0) {
+                    matchedKey = pair.first;
+                    break;
+                }
+            }
 
-        if (answer == "1") finalPrefs.preferredTransport = TransportationType::TRAIN;
-        else if (answer == "2") finalPrefs.preferredTransport = TransportationType::BUS;
-        else if (answer == "3") finalPrefs.preferredTransport = TransportationType::PLANE;
-        else finalPrefs.preferredTransport = TransportationType::ANY;
+            if (!matchedKey.empty()) {
+                finalPrefs.preferredTransport = transportChoices.at(matchedKey);
+                choiceMade = true;
+            } else {
+                cout << "Invalid choice, please try again.\n";
+            }
+        }
 
         cout << "Transportation preference set to: " << transportTypeToString(finalPrefs.preferredTransport) << endl;
         
         return finalPrefs;
     }
-    void visualize() const {cout<<"\n--- Decision Tree Structure ---\n"; printTree(root,0); cout<<"-----------------------------\n";}
+
+    void visualize() const {
+        cout<<"\n--- Decision Tree Structure ---\n"; 
+        printTree(root, 0); cout<<"-----------------------------\n";
+    }
 };
 
 
@@ -208,6 +247,18 @@ public:
     // No longer need to delete the copy constructor with shared_ptr
     Graph() = default;
 
+    void printAllLocations() const {
+        cout << "\n--- Available Locations ---\n";
+        for (const auto& pair : locations) {
+            cout << "ID: " << pair.first << " -> " << pair.second.getName() << endl;
+        }
+        cout << "---------------------------\n";
+    }
+
+    bool isValidLocation(int id) const {
+        return locations.count(id);
+    }
+
     void addLocation(const string& name, double lat, double lon) { int id=nextId++; locations[id]=Location(id,name,lat,lon); adjList[id]={}; }
 
     void addRoute(int srcId, int destId, double dist, double time, double cost, TransportationType type) {
@@ -266,6 +317,7 @@ int main() {
         transportationSystem.addLocation("Surabaya (SUB)", -7.2575, 112.7521);
         transportationSystem.addLocation("Denpasar (DPS)", -8.6700, 115.2124);
         transportationSystem.addLocation("Semarang (SRG)", -6.9667, 110.4381);
+        transportationSystem.addLocation("Makassar (MKS)", -5.1354, 119.4238);
 
         transportationSystem.addRoute(1, 2, 150000.0, 180.0, 150.0, TransportationType::TRAIN);
         transportationSystem.addRoute(1, 5, 500000.0, 360.0, 300.0, TransportationType::TRAIN);
@@ -273,10 +325,36 @@ int main() {
         transportationSystem.addRoute(5, 3, 350000.0, 300.0, 150.5, TransportationType::BUS);
         transportationSystem.addRoute(3, 4, 430000.0, 60.0, 700.0, TransportationType::PLANE);
         transportationSystem.addRoute(1, 4, 1180000.0, 114.0, 1200.0, TransportationType::PLANE);
+        transportationSystem.addRoute(3, 6, 620000.0, 1860.0, 450.0, TransportationType::BOAT);
 
+        // --- Get User Preferences ---
         preferenceFinder.visualize();
         UserPreferences userPrefs = preferenceFinder.run();
-        transportationSystem.findShortestPath(1, 4, userPrefs);
+
+        // --- MODIFIED: Get User Start and End Locations ---
+        int startId = 0, goalId = 0;
+        transportationSystem.printAllLocations();
+
+        while (true) {
+            cout << "\nEnter the ID for your starting location: ";
+            cin >> startId;
+            if (transportationSystem.isValidLocation(startId)) {
+                break;
+            }
+            cout << "Invalid ID. Please try again." << endl;
+        }
+
+        while (true) {
+            cout << "Enter the ID for your destination: ";
+            cin >> goalId;
+            if (transportationSystem.isValidLocation(goalId)) {
+                break;
+            }
+            cout << "Invalid ID. Please try again." << endl;
+        }
+
+        // --- Find and Display the Path ---
+        transportationSystem.findShortestPath(startId, goalId, userPrefs);
 
     } catch (const exception& e) {
         cerr << "An error occurred: " << e.what() << endl;
