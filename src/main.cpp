@@ -9,8 +9,8 @@
 #include <cmath>
 #include <algorithm>
 #include <iomanip>
-#include <fstream>
-#include <sstream>
+
+// Added to remove the "std::" prefix from standard library components
 using namespace std;
 
 // Define M_PI if it's not defined by the cmath header on some compilers
@@ -19,21 +19,18 @@ using namespace std;
 #endif
 
 // =================================================================================
-// 1. FORWARD DECLARATIONS & CORE DATA TYPES
+// 1. CORE DATA TYPES & FORWARD DECLARATIONS
 // =================================================================================
 
-// Forward declare classes so they can reference each other
 class Location;
 class Route;
 class Graph;
 struct UserPreferences;
-struct TreeNode; // Node for our Decision Tree
+struct TreeNode;
 class DecisionTree;
 
-// Using enums makes the code safer and more readable
 enum class TransportationType { ANY, BUS, TRAIN, BOAT, PLANE };
 
-// Helper to convert enum to string for printing
 string transportTypeToString(TransportationType type) {
     switch (type) {
         case TransportationType::BUS: return "Bus";
@@ -45,12 +42,8 @@ string transportTypeToString(TransportationType type) {
     return "Unknown";
 }
 
-/**
- * @struct UserPreferences
- * @brief Encapsulates all user choices into a single object. This is the OUTPUT of the Decision Tree.
- */
 struct UserPreferences {
-    string profileName; // e.g., "Budget Traveler", "Business Professional"
+    string profileName;
     double timeWeight = 1.0;
     double costWeight = 1.0;
     double distanceWeight = 1.0;
@@ -65,77 +58,30 @@ struct GraphStats {
 
 // =================================================================================
 // 2. DECISION TREE IMPLEMENTATION
-// This section implements the Tree data structure for determining user preferences.
 // =================================================================================
 
-/**
- * @struct TreeNode
- * @brief Represents a node in the Decision Tree. It's either a question or a final decision (a leaf).
- */
 struct TreeNode {
-    string question;
-    bool isLeaf = false;
-    UserPreferences preferences; // Only used if it's a leaf node
-
-    // Maps an answer (e.g., "1", "2") to the next node in the tree.
-    // Using unique_ptr for automatic memory management of child nodes.
-    map<string, unique_ptr<TreeNode>> children;
-
-    TreeNode(string q) : question(move(q)) {} // Constructor for question nodes
-    TreeNode(UserPreferences prefs) : isLeaf(true), preferences(move(prefs)) {} // Constructor for leaf nodes
+    string question; bool isLeaf = false; UserPreferences preferences;
+    // THE FIX - ALTERNATIVE: Using shared_ptr for the tree nodes as well for consistency.
+    map<string, shared_ptr<TreeNode>> children;
+    TreeNode(string q) : question(move(q)) {} TreeNode(UserPreferences prefs) : isLeaf(true), preferences(move(prefs)) {}
 };
 
-/**
- * @class DecisionTree
- * @brief Manages and runs the decision-making process to determine UserPreferences.
- */
 class DecisionTree {
 private:
-    unique_ptr<TreeNode> root;
-
+    shared_ptr<TreeNode> root;
     void buildTree() {
-        auto budget = UserPreferences{"Budget Traveler", 1.0, 10.0, 3.0};
-        auto balanced = UserPreferences{"Balanced Traveler", 5.0, 5.0, 5.0};
-        auto business = UserPreferences{"Business Traveler", 10.0, 2.0, 1.0};
-        
-        root = make_unique<TreeNode>("What is your main priority for this trip?");
-        root->children["1. Fastest Time"] = make_unique<TreeNode>(business);
-        root->children["2. Lowest Cost"] = make_unique<TreeNode>(budget);
-        root->children["3. A Balanced Approach"] = make_unique<TreeNode>(balanced);
+        auto budget=UserPreferences{"Budget Traveler",1.0,10.0,3.0}; auto balanced=UserPreferences{"Balanced Traveler",5.0,5.0,5.0}; auto business=UserPreferences{"Business Traveler",10.0,2.0,1.0};
+        root = make_shared<TreeNode>("What is your main priority?");
+        root->children["1. Fastest Time"]=make_shared<TreeNode>(business); root->children["2. Lowest Cost"]=make_shared<TreeNode>(budget); root->children["3. A Balanced Approach"]=make_shared<TreeNode>(balanced);
     }
-
-    // A helper function for visualizing the tree recursively
-    void printTree(const TreeNode* node, int indent) const {
-        if (!node) return;
-
-        // Print indentation
-        for (int i = 0; i < indent; ++i) cout << "  ";
-
-        if (node->isLeaf) {
-            cout << "-> LEAF: " << node->preferences.profileName << " (Time:"
-                      << node->preferences.timeWeight << ", Cost:" << node->preferences.costWeight << ")" << endl;
-        } else {
-            cout << "Q: " << node->question << endl;
-            for (const auto& pair : node->children) {
-                for (int i = 0; i < indent; ++i) cout << "  ";
-                cout << "  [" << pair.first << "] " << endl;
-                printTree(pair.second.get(), indent + 2);
-            }
-        }
-    }
+    void printTree(const shared_ptr<TreeNode>& n, int i) const { if(!n)return; for(int k=0;k<i;++k)cout<<"  "; if(n->isLeaf){cout<<"-> LEAF: "<<n->preferences.profileName<<"\n";}else{cout<<"Q: "<<n->question<<"\n"; for(const auto& p:n->children){for(int k=0;k<i;++k)cout<<"  "; cout<<"  ["<<p.first<<"]\n"; printTree(p.second,i+2);}}}
 
 public:
-    DecisionTree() {
-        buildTree();
-    }
-
-    /**
-     * @brief Traverses the tree by asking the user questions to find their preferences.
-     * @return The UserPreferences object determined by the user's answers.
-     */
+    DecisionTree(){buildTree();}
     UserPreferences run() const {
         cout<<"\n--- Let's Find Your Travel Style! ---\n";
-        const TreeNode* currentNode = root.get();
+        shared_ptr<const TreeNode> currentNode = root;
         string answer;
 
         while(!currentNode->isLeaf){
@@ -143,7 +89,7 @@ public:
             for(const auto& p : currentNode->children){ cout<<"   "<<p.first<<"\n"; }
             cout<<"Your choice: ";
             cin>>answer;
-            if(currentNode->children.count(answer)){ currentNode = currentNode->children.at(answer).get(); }
+            if(currentNode->children.count(answer)){ currentNode = currentNode->children.at(answer); }
             else{ cout<<"Invalid choice, try again.\n"; }
         }
         
@@ -167,39 +113,29 @@ public:
         
         return finalPrefs;
     }
-    void visualize() const {cout<<"\n--- Decision Tree Structure ---\n"; printTree(root.get(),0); cout<<"-----------------------------\n";}
+    void visualize() const {cout<<"\n--- Decision Tree Structure ---\n"; printTree(root,0); cout<<"-----------------------------\n";}
 };
 
 
 // =================================================================================
-// 3. GRAPH & ROUTING IMPLEMENTATION (Largely unchanged)
+// 3. GRAPH & ROUTING IMPLEMENTATION
 // =================================================================================
 
-class Location { /* ... same as before ... */
-private: 
-    int id; 
-    string name; 
-    double latitude; 
-    double longitude;
-public: 
-    Location(int id=0, string n="", double lat=0.0, double lon=0.0)
-        :id(id),name(n),latitude(lat),longitude(lon){}
-    int getId() const {return id;}
-    string getName() const {return name;}
-    double getLatitude() const { return latitude; }
-    double getLongitude() const { return longitude; }
+class Location {
+private: int id; string name; double latitude; double longitude;
+public: Location(int id=0, string name="N/A", double lat=0.0, double lon=0.0):id(id),name(name),latitude(lat),longitude(lon){}
+int getId() const {return id;} string getName() const {return name;} double getLatitude() const {return latitude;} double getLongitude() const {return longitude;}
 };
 
-class Route { /* ... same as before ... */
-protected: 
-    Location* source; 
-    Location* destination; 
-    double distance; 
-    double time; 
+class Route {
+protected:
+    Location* source;
+    Location* destination;
+    double distance;
+    double time;
     double cost;
     TransportationType type;
-
-public: 
+public:
     Route(Location* s, Location* d, double dist, double t, double c, TransportationType tp)
         : source(s), destination(d), distance(dist), time(t), cost(c), type(tp) {}
     virtual ~Route() = default;
@@ -211,8 +147,8 @@ public:
     TransportationType getType() const { return type; }
 };
 
-class ConcreteRoute : public Route { /* ... same as before ... */
-public: 
+class ConcreteRoute : public Route {
+public:
     ConcreteRoute(Location* s, Location* d, double dist, double t, double c, TransportationType tp)
         : Route(s, d, dist, t, c, tp) {}
 
@@ -220,13 +156,10 @@ public:
         double normTime = time / stats.maxTime;
         double normCost = cost / stats.maxCost;
         double normDist = distance / stats.maxDistance;
-
         double baseWeight = (normTime * prefs.timeWeight) + (normCost * prefs.costWeight) + (normDist * prefs.distanceWeight);
-
         if (prefs.preferredTransport != TransportationType::ANY && this->type != prefs.preferredTransport) {
-            baseWeight += 1000.0; // A large penalty to deprioritize this route
+            baseWeight += 1000.0;
         }
-
         return baseWeight;
     }
 };
@@ -234,7 +167,9 @@ public:
 class Graph {
 private:
     map<int, Location> locations;
-    map<int, vector<unique_ptr<Route>>> adjList;
+    // THE FIX - ALTERNATIVE: Using shared_ptr instead of unique_ptr.
+    // shared_ptr is copyable and will resolve the compilation error.
+    map<int, vector<shared_ptr<Route>>> adjList;
     GraphStats stats;
     int nextId = 1;
 
@@ -251,8 +186,8 @@ private:
         cout << "\nBest Route Found:\n";
         double totalTime = 0, totalCost = 0, totalDist = 0;
         for (size_t i = 0; i < total_path.size() - 1; ++i) {
-            int fromId = total_path[i]; int toId = total_path[i+1]; const Route* routeTaken = nullptr;
-            for (const auto& r : adjList.at(fromId)) { if (r->getDestination()->getId() == toId) { routeTaken = r.get(); break; } }
+            int fromId = total_path[i]; int toId = total_path[i+1]; shared_ptr<const Route> routeTaken = nullptr;
+            for (const auto& r : adjList.at(fromId)) { if (r->getDestination()->getId() == toId) { routeTaken = r; break; } }
             if (routeTaken) {
                 cout << "  " << i + 1 << ". From " << locations.at(fromId).getName()
                           << " to " << locations.at(toId).getName()
@@ -270,16 +205,7 @@ private:
     }
 
 public:
-    // ==============================================================================
-    // THE FIX FOR THE COMPILATION ERROR IS RIGHT HERE:
-    // By deleting the copy constructor and copy assignment operator, we tell C++
-    // that our Graph object, which holds non-copyable unique_ptrs, cannot be copied.
-    // This resolves the error you were seeing.
-    Graph(const Graph&) = delete;
-    Graph& operator=(const Graph&) = delete;
-    // ==============================================================================
-
-    // We must explicitly define the default constructor after deleting the copy ones.
+    // No longer need to delete the copy constructor with shared_ptr
     Graph() = default;
 
     void addLocation(const string& name, double lat, double lon) { int id=nextId++; locations[id]=Location(id,name,lat,lon); adjList[id]={}; }
@@ -289,7 +215,8 @@ public:
         if (type == TransportationType::ANY) {
             throw runtime_error("A specific route must have a specific transportation type, not ANY.");
         }
-        adjList.at(srcId).push_back(make_unique<ConcreteRoute>(&locations.at(srcId), &locations.at(destId), dist, time, cost, type));
+        // THE FIX - ALTERNATIVE: Use make_shared instead of make_unique
+        adjList.at(srcId).push_back(make_shared<ConcreteRoute>(&locations.at(srcId), &locations.at(destId), dist, time, cost, type));
 
         if (time > stats.maxTime) stats.maxTime = time;
         if (cost > stats.maxCost) stats.maxCost = cost;
@@ -334,21 +261,18 @@ int main() {
         Graph transportationSystem;
         DecisionTree preferenceFinder;
 
-        // --- Setup the Graph with sample data (MODIFIED to include transport types) ---
         transportationSystem.addLocation("Jakarta (JKT)", -6.1751, 106.8650);
         transportationSystem.addLocation("Bandung (BDO)", -6.9175, 107.6191);
         transportationSystem.addLocation("Surabaya (SUB)", -7.2575, 112.7521);
         transportationSystem.addLocation("Denpasar (DPS)", -8.6700, 115.2124);
         transportationSystem.addLocation("Semarang (SRG)", -6.9667, 110.4381);
 
-        // time in minutes, distance in meters, cost in Thousand Rupiah
         transportationSystem.addRoute(1, 2, 150000.0, 180.0, 150.0, TransportationType::TRAIN);
         transportationSystem.addRoute(1, 5, 500000.0, 360.0, 300.0, TransportationType::TRAIN);
         transportationSystem.addRoute(2, 3, 650000.0, 600.0, 400.0, TransportationType::TRAIN);
         transportationSystem.addRoute(5, 3, 350000.0, 300.0, 150.5, TransportationType::BUS);
         transportationSystem.addRoute(3, 4, 430000.0, 60.0, 700.0, TransportationType::PLANE);
         transportationSystem.addRoute(1, 4, 1180000.0, 114.0, 1200.0, TransportationType::PLANE);
-
 
         preferenceFinder.visualize();
         UserPreferences userPrefs = preferenceFinder.run();
@@ -358,6 +282,5 @@ int main() {
         cerr << "An error occurred: " << e.what() << endl;
         return 1;
     }
-
     return 0;
 }
