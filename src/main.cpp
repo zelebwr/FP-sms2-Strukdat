@@ -1,243 +1,247 @@
-// =================================================================================
-// HEADERS 
-// =================================================================================
-// Input/Output operations
-#include <iostream> 
-#include <fstream> // For file input/output (saving/loading data)
-#include <sstream> // For string stream manipulations
-
-// Data Structures
-#include <vector> // For dynamic arrays (e.g., to store lists of routes)
-#include <map> // For key-value pairs (e.g., managing nodes by ID)
-#include <unordered_map> // For more efficient key-value access
-#include <queue> // For implementing priority_queue (essential for Dijkstra/A*)
-#include <list> // For adjacency list representation of the graph
-#include <string> // For handling text data
-
-// Algorithms and Utilities
-#include <algorithm> // For sorting, searching, and other algorithms
-#include <limits> // To represent infinity in pathfinding algorithms
-#include <memory> // For smart pointers (e.g., unique_ptr, shared_ptr)
-
-using namespace std;
+#include <iostream>
+#include <vector>
+#include <string>
+#include <map>
+#include <queue>
+#include <memory>
+#include <stdexcept>
+#include <limits>
+#include <cmath>
+#include <fstream>
+#include <sstream>
 
 // =================================================================================
-// FORWARD DECLARATIONS
+// 1. FORWARD DECLARATIONS & CORE DATA TYPES
 // =================================================================================
 
+// Forward declare classes so they can reference each other
 class Location;
 class Route;
 class Graph;
+struct UserPreferences;
+struct TreeNode; // Node for our Decision Tree
+class DecisionTree;
+
+// Using enums makes the code safer and more readable
+enum class TransportationType { BUS, TRAIN, BOAT, PLANE };
+enum class TransportationClass { ECONOMY, EXECUTIVE, BUSINESS, FIRST_CLASS };
+
+/**
+ * @struct UserPreferences
+ * @brief Encapsulates all user choices into a single object. This is the OUTPUT of the Decision Tree.
+ */
+struct UserPreferences {
+    std::string profileName; // e.g., "Budget Traveler", "Business Professional"
+    double timeWeight = 1.0;
+    double costWeight = 1.0;
+    double distanceWeight = 1.0;
+};
+
 
 // =================================================================================
-// ENCAPSULATION: Location Class
-// Represents a node in the graph. Data is encapsulated (private members).
+// 2. DECISION TREE IMPLEMENTATION
+// This section implements the Tree data structure for determining user preferences.
 // =================================================================================
-class Location {
+
+/**
+ * @struct TreeNode
+ * @brief Represents a node in the Decision Tree. It's either a question or a final decision (a leaf).
+ */
+struct TreeNode {
+    std::string question;
+    bool isLeaf = false;
+    UserPreferences preferences; // Only used if it's a leaf node
+
+    // Maps an answer (e.g., "1", "2") to the next node in the tree.
+    // Using unique_ptr for automatic memory management of child nodes.
+    std::map<std::string, std::unique_ptr<TreeNode>> children;
+
+    TreeNode(std::string q) : question(q) {} // Constructor for question nodes
+    TreeNode(UserPreferences prefs) : isLeaf(true), preferences(prefs) {} // Constructor for leaf nodes
+};
+
+/**
+ * @class DecisionTree
+ * @brief Manages and runs the decision-making process to determine UserPreferences.
+ */
+class DecisionTree {
 private:
-    int id;
-    string name;
+    std::unique_ptr<TreeNode> root;
 
-public:
-    Location(int id = 0, string name = "") : id(id), name(name) {}
+    // A helper function for visualizing the tree recursively
+    void printTree(const TreeNode* node, int indent) const {
+        if (!node) return;
 
-    int getId() const { return id; }
-    string getName() const { return name; }
-};
+        // Print indentation
+        for (int i = 0; i < indent; ++i) std::cout << "  ";
 
-// =================================================================================
-// ABSTRACTION & POLYMORPHISM: Abstract Route Class
-// This is an abstract base class for different types of routes (edges).
-// It uses pure virtual functions to enforce an interface on derived classes.
-// =================================================================================
-class Route {
-protected:
-    Location* source;
-    Location* destination;
-    double distance; // in km
-    double time;     // in hours
-    double cost;     // in currency
-
-public:
-    Route(Location* src, Location* dest, double dist, double t, double c)
-        : source(src), destination(dest), distance(dist), time(t), cost(c) {}
-
-    // Virtual destructor for proper cleanup of derived objects through base pointers
-    virtual ~Route() {}
-
-    // Pure virtual function makes Route an abstract class
-    // This allows for polymorphic behavior based on user preference
-    virtual double calculateWeight() const = 0;
-
-    // Getters
-    Location* getSource() const { return source; }
-    Location* getDestination() const { return destination; }
-    double getDistance() const { return distance; }
-    double getTime() const { return time; }
-    double getCost() const { return cost; }
-};
-
-
-// =================================================================================
-// INHERITANCE: Concrete Route Classes
-// These classes inherit from the abstract Route class and provide specific
-// implementations for calculating the route's weight.
-// =================================================================================
-
-class TimeBasedRoute : public Route {
-public:
-    TimeBasedRoute(Location* src, Location* dest, double dist, double t, double c)
-        : Route(src, dest, dist, t, c) {}
-
-    // Specific implementation for time-based preference
-    double calculateWeight() const override {
-        return time;
-    }
-};
-
-class CostBasedRoute : public Route {
-public:
-    CostBasedRoute(Location* src, Location* dest, double dist, double t, double c)
-        : Route(src, dest, dist, t, c) {}
-
-    // Specific implementation for cost-based preference
-    double calculateWeight() const override {
-        return cost;
-    }
-};
-
-class DistanceBasedRoute : public Route {
-public:
-    DistanceBasedRoute(Location* src, Location* dest, double dist, double t, double c)
-        : Route(src, dest, dist, t, c) {}
-
-    // Specific implementation for distance-based preference
-    double calculateWeight() const override {
-        return distance;
-    }
-};
-
-
-// =================================================================================
-// GRAPH CLASS: Manages the network of locations and routes
-// =================================================================================
-class Graph {
-private:
-    // Adjacency list: map a location ID to a vector of routes starting from it
-    map<int, vector<unique_ptr<Route>>> adjList;
-    // Map to hold all locations for easy access
-    map<int, Location> locations;
-    int nextLocationId = 1;
-
-public:
-    // --- CRUD Functionality for Locations ---
-    void addLocation(const string& name) {
-        int id = nextLocationId++;
-        locations[id] = Location(id, name);
-        adjList[id] = {}; // Initialize adjacency list for the new location
-        cout << "Location '" << name << "' added with ID " << id << "." << endl;
-    }
-
-    void readLocation(int id) {
-        if (locations.find(id) != locations.end()) {
-            cout << "Location ID: " << locations[id].getId() << ", Name: " << locations[id].getName() << endl;
+        if (node->isLeaf) {
+            std::cout << "-> LEAF: " << node->preferences.profileName << " (Time:"
+                      << node->preferences.timeWeight << ", Cost:" << node->preferences.costWeight << ")" << std::endl;
         } else {
-            cout << "Location with ID " << id << " not found." << endl;
-        }
-    }
-    
-    // --- CRUD Functionality for Routes ---
-    void addRoute(int srcId, int destId, double dist, double time, double cost) {
-        if (locations.find(srcId) == locations.end() || locations.find(destId) == locations.end()) {
-            throw runtime_error("Invalid source or destination ID.");
-        }
-        
-        Location* src = &locations[srcId];
-        Location* dest = &locations[destId];
-        
-        // Example: Adding multiple route types to demonstrate polymorphism
-        adjList[srcId].push_back(make_unique<TimeBasedRoute>(src, dest, dist, time, cost));
-        // In a real scenario, you'd add the route type based on some logic
-        // adjList[srcId].push_back(make_unique<CostBasedRoute>(src, dest, dist, time, cost));
-
-        cout << "Route from " << src->getName() << " to " << dest->getName() << " added." << endl;
-    }
-
-    // --- Pathfinding ---
-    void findShortestPath(int srcId, int destId, const string& preference) {
-        // Placeholder for Dijkstra or A* algorithm
-        // The 'preference' string ("time", "cost", "distance") will determine
-        // which 'calculateWeight' implementation to use polymorphically.
-        cout << "\nFinding shortest path from " << locations[srcId].getName() 
-                  << " to " << locations[destId].getName() 
-                  << " with preference for lowest " << preference << "." << endl;
-        // ... algorithm implementation goes here ...
-    }
-
-    // --- Visualization ---
-    void visualizeText() {
-        cout << "\n--- Graph Visualization ---" << endl;
-        for (const auto& pair : adjList) {
-            Location loc = locations[pair.first];
-            cout << "Location: " << loc.getName() << " (ID: " << loc.getId() << ")" << endl;
-            for (const auto& route : pair.second) {
-                cout << "  -> " << route->getDestination()->getName()
-                          << " (Dist: " << route->getDistance() 
-                          << ", Time: " << route->getTime() 
-                          << ", Cost: " << route->getCost() << ")" << endl;
+            std::cout << "Q: " << node->question << std::endl;
+            for (const auto& pair : node->children) {
+                for (int i = 0; i < indent; ++i) std::cout << "  ";
+                std::cout << "  [" << pair.first << "] " << std::endl;
+                printTree(pair.second.get(), indent + 2);
             }
         }
-        cout << "-------------------------" << endl;
     }
 
-    // --- File I/O ---
-    void saveToFile(const string& filename) {
-        // Placeholder for saving graph data to a file (e.g., CSV, JSON)
-        cout << "Saving graph to " << filename << "..." << endl;
+public:
+    DecisionTree() {
+        buildTree();
     }
 
-    void loadFromFile(const string& filename) {
-        // Placeholder for loading graph data from a file
-        cout << "Loading graph from " << filename << "..." << endl;
+    /**
+     * @brief Constructs the static decision tree with all questions and outcomes.
+     */
+    void buildTree() {
+        // Define final outcomes (leaf nodes)
+        auto budgetTraveler = UserPreferences{"Budget Traveler", 1.0, 10.0, 3.0};
+        auto balancedTraveler = UserPreferences{"Balanced Traveler", 5.0, 5.0, 5.0};
+        auto businessTraveler = UserPreferences{"Business Traveler", 10.0, 2.0, 1.0};
+        auto scenicExplorer = UserPreferences{"Scenic Explorer", 2.0, 4.0, 10.0};
+
+        // Create the tree structure from the bottom up
+        root = std::make_unique<TreeNode>("What is your main priority for this trip?");
+        
+        // Branch 1: Time is most important
+        auto timeNode = std::make_unique<TreeNode>("You prioritize speed. Is budget a major concern?");
+        timeNode->children["1. Yes, budget is tight."] = std::make_unique<TreeNode>(balancedTraveler);
+        timeNode->children["2. No, speed is everything."] = std::make_unique<TreeNode>(businessTraveler);
+
+        // Branch 2: Cost is most important
+        auto costNode = std::make_unique<TreeNode>("You prioritize low cost. Are you completely flexible on time?");
+        costNode->children["1. Yes, I have plenty of time."] = std::make_unique<TreeNode>(budgetTraveler);
+        costNode->children["2. No, I still need a reasonable travel time."] = std::make_unique<TreeNode>(balancedTraveler);
+        
+        // Branch 3: Scenery/Distance is most important
+        auto distanceNode = std::make_unique<TreeNode>("You want to explore. Do you prefer a direct route or one with more stops?");
+        distanceNode->children["1. A direct, scenic route."] = std::make_unique<TreeNode>(scenicExplorer);
+        distanceNode->children["2. A balanced approach is fine."] = std::make_unique<TreeNode>(balancedTraveler);
+
+        // Connect branches to the root
+        root->children["1. Fastest time"] = std::move(timeNode);
+        root->children["2. Lowest cost"] = std::move(costNode);
+        root->children["3. Shortest distance / Most scenic"] = std::move(distanceNode);
+    }
+
+    /**
+     * @brief Traverses the tree by asking the user questions to find their preferences.
+     * @return The UserPreferences object determined by the user's answers.
+     */
+    UserPreferences run() const {
+        std::cout << "\n--- Let's Find Your Travel Style! ---\n";
+        TreeNode* currentNode = root.get();
+        std::string answer;
+
+        while (!currentNode->isLeaf) {
+            std::cout << "\nQ: " << currentNode->question << std::endl;
+            for (const auto& pair : currentNode->children) {
+                std::cout << "   " << pair.first << std::endl;
+            }
+            std::cout << "Your choice: ";
+            std::cin >> answer;
+
+            if (currentNode->children.count(answer)) {
+                currentNode = currentNode->children.at(answer).get();
+            } else {
+                std::cout << "Invalid choice, please try again." << std::endl;
+            }
+        }
+
+        std::cout << "\n---------------------------------------\n";
+        std::cout << "Great! We've determined your profile is: " << currentNode->preferences.profileName << std::endl;
+        std::cout << "---------------------------------------\n";
+        return currentNode->preferences;
+    }
+
+    /**
+     * @brief Prints a textual representation of the decision tree structure.
+     */
+    void visualize() const {
+        std::cout << "\n--- Decision Tree Structure ---\n";
+        printTree(root.get(), 0);
+        std::cout << "-----------------------------\n";
     }
 };
 
+
 // =================================================================================
-// MAIN FUNCTION: Entry point of the program
+// 3. GRAPH & ROUTING IMPLEMENTATION (Largely unchanged)
 // =================================================================================
+
+class Location { /* ... same as before ... */
+private: int id; std::string name; double latitude; double longitude;
+public: Location(int id=0, std::string n="", double lat=0.0, double lon=0.0):id(id),name(n),latitude(lat),longitude(lon){}
+int getId() const {return id;} std::string getName() const {return name;}
+};
+
+class Route { /* ... same as before ... */
+protected: Location* source; Location* destination; double distance; double time; double cost;
+public: Route(Location* s, Location* d, double dist, double t, double c):source(s),destination(d),distance(dist),time(t),cost(c){}
+virtual ~Route(){} virtual double calculateWeight(const UserPreferences& p) const = 0;
+Location* getDestination() const { return destination; }
+};
+
+class ConcreteRoute : public Route { /* ... same as before ... */
+public: ConcreteRoute(Location* s, Location* d, double dist, double t, double c):Route(s,d,dist,t,c){}
+double calculateWeight(const UserPreferences& prefs) const override {
+    // NOTE: In a real system, you would NORMALIZE these values first!
+    return (time * prefs.timeWeight) + (cost * prefs.costWeight) + (distance * prefs.distanceWeight);
+}
+};
+
+class Graph { /* ... same as before, simplified for clarity ... */
+private: std::map<int, Location> locations; std::map<int, std::vector<std::unique_ptr<Route>>> adjList; int nextId=1;
+public:
+    void addLocation(const std::string& n, double lat, double lon){ int id=nextId++; locations[id]=Location(id,n,lat,lon); adjList[id]={}; }
+    void addRoute(int sId, int dId, double d, double t, double c){
+        if(!locations.count(sId) || !locations.count(dId)) return;
+        adjList.at(sId).push_back(std::make_unique<ConcreteRoute>(&locations.at(sId),&locations.at(dId),d,t,c));
+    }
+    void findShortestPath(int startId, int goalId, const UserPreferences& prefs) const {
+        std::cout << "\n======================================================\n";
+        std::cout << "Finding route for profile: " << prefs.profileName << "\n";
+        std::cout << "Searching path from " << locations.at(startId).getName() << " to " << locations.at(goalId).getName() << "...\n";
+        std::cout << "A* algorithm would run here using the calculated weights.\n";
+        std::cout << "======================================================\n\n";
+    }
+};
+
+
+// =================================================================================
+// 4. MAIN PROGRAM FLOW
+// =================================================================================
+
 int main() {
-    Graph transportationSystem;
-
     try {
-        // --- Setup the graph based on your project data ---
-        cout << "Initializing transportation system..." << endl;
-        transportationSystem.addLocation("City A"); // ID 1
-        transportationSystem.addLocation("City B"); // ID 2
-        transportationSystem.addLocation("City C"); // ID 3
-        transportationSystem.addLocation("City D"); // ID 4
+        // --- Step 1: Setup the Graph and Decision Tree ---
+        Graph transportationSystem;
+        DecisionTree preferenceFinder;
 
-        // Add routes
-        transportationSystem.addRoute(1, 2, 100, 1.5, 50);  // A -> B
-        transportationSystem.addRoute(1, 3, 200, 3.0, 120); // A -> C
-        transportationSystem.addRoute(2, 3, 50,  0.8, 25);  // B -> C
-        transportationSystem.addRoute(2, 4, 150, 2.0, 80);  // B -> D
-        transportationSystem.addRoute(3, 4, 180, 2.5, 90);  // C -> D
-        
-        // --- Demonstrate Features ---
-        
-        // Visualize the graph
-        transportationSystem.visualizeText();
-        
-        // Find path based on user preference (demonstrates polymorphism)
-        transportationSystem.findShortestPath(1, 4, "time");
-        transportationSystem.findShortestPath(1, 4, "cost");
+        // Populate the graph (this would normally be from a file)
+        transportationSystem.addLocation("Jakarta (JKT)", -6.17, 106.82);
+        transportationSystem.addLocation("Bandung (BDO)", -6.91, 107.61);
+        transportationSystem.addLocation("Surabaya (SUB)", -7.25, 112.75);
+        transportationSystem.addRoute(1, 2, 150, 3.0, 150000); // JKT -> BDO
+        transportationSystem.addRoute(1, 3, 780, 1.5, 900000); // JKT -> SUB (Plane)
+        transportationSystem.addRoute(2, 3, 650, 10.0, 400000); // BDO -> SUB
 
-        // Save/Load functionality
-        transportationSystem.saveToFile("graph_data.txt");
-        transportationSystem.loadFromFile("graph_data.txt");
+        // --- Step 2: Visualize the Decision Tree Structure (as required) ---
+        preferenceFinder.visualize();
 
-    } catch (const exception& e) {
-        cerr << "An error occurred: " << e.what() << endl;
+        // --- Step 3: Run the Decision Tree to get user's preferences ---
+        UserPreferences userPrefs = preferenceFinder.run();
+
+        // --- Step 4: Use the determined preferences to find the best route ---
+        // The `userPrefs` object is the bridge between the two data structures.
+        transportationSystem.findShortestPath(1, 3, userPrefs); // Find path from Jakarta to Surabaya
+
+    } catch (const std::exception& e) {
+        std::cerr << "An error occurred: " << e.what() << std::endl;
+        return 1;
     }
 
     return 0;
