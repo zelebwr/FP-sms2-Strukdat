@@ -231,24 +231,16 @@ public:
     }
 };
 
-class Graph { /* ... same as before, simplified for clarity ... */
-private: 
+class Graph {
+private:
     map<int, Location> locations;
     map<int, vector<unique_ptr<Route>>> adjList;
     GraphStats stats;
     int nextId = 1;
 
     double heuristic(const Location& a, const Location& b) const {
-        const double R=6371.0; 
-        double lat1=a.getLatitude()*M_PI/180.0; 
-        double lon1=a.getLongitude()*M_PI/180.0; 
-        double lat2=b.getLatitude()*M_PI/180.0; 
-        double lon2=b.getLongitude()*M_PI/180.0;
-        double dlon=lon2-lon1; 
-        double dlat=lat2-lat1; 
-        double val=pow(sin(dlat/2),2)+cos(lat1)*cos(lat2)*pow(sin(dlon/2),2); 
-        double c=2*asin(sqrt(val)); 
-        return R*c;
+        const double R=6371.0; double lat1=a.getLatitude()*M_PI/180.0; double lon1=a.getLongitude()*M_PI/180.0; double lat2=b.getLatitude()*M_PI/180.0; double lon2=b.getLongitude()*M_PI/180.0;
+        double dlon=lon2-lon1; double dlat=lat2-lat1; double val=pow(sin(dlat/2),2)+cos(lat1)*cos(lat2)*pow(sin(dlon/2),2); double c=2*asin(sqrt(val)); return R*c;
     }
 
     void reconstructAndPrintPath(const map<int, int>& came_from, int currentId) const {
@@ -264,7 +256,7 @@ private:
             if (routeTaken) {
                 cout << "  " << i + 1 << ". From " << locations.at(fromId).getName()
                           << " to " << locations.at(toId).getName()
-                          << " by " << transportTypeToString(routeTaken->getType()) // MODIFIED: Show transport type
+                          << " by " << transportTypeToString(routeTaken->getType())
                           << " (Time: " << routeTaken->getTime() << "m, Cost: " << routeTaken->getCost() << "k"
                           << ", Dist: " << routeTaken->getDistance() << "m)\n";
                 totalTime += routeTaken->getTime(); totalCost += routeTaken->getCost(); totalDist += routeTaken->getDistance();
@@ -276,23 +268,27 @@ private:
                   << ", Distance: " << totalDist << " meters\n";
         cout << "======================================================\n\n";
     }
-    
+
 public:
-    // This tells the compiler that the Graph object cannot be copied.
+    // ==============================================================================
+    // THE FIX FOR THE COMPILATION ERROR IS RIGHT HERE:
+    // By deleting the copy constructor and copy assignment operator, we tell C++
+    // that our Graph object, which holds non-copyable unique_ptrs, cannot be copied.
+    // This resolves the error you were seeing.
     Graph(const Graph&) = delete;
     Graph& operator=(const Graph&) = delete;
+    // ==============================================================================
 
-    // We must define the default constructor since we deleted the copy constructor
+    // We must explicitly define the default constructor after deleting the copy ones.
     Graph() = default;
 
-    void addLocation(const string& name, double lat, double lon) {
-        int id = nextId++;
-        locations[id] = Location(id, name, lat, lon);
-        adjList[id] = {};
-    }
+    void addLocation(const string& name, double lat, double lon) { int id=nextId++; locations[id]=Location(id,name,lat,lon); adjList[id]={}; }
 
     void addRoute(int srcId, int destId, double dist, double time, double cost, TransportationType type) {
         if (!locations.count(srcId) || !locations.count(destId)) return;
+        if (type == TransportationType::ANY) {
+            throw runtime_error("A specific route must have a specific transportation type, not ANY.");
+        }
         adjList.at(srcId).push_back(make_unique<ConcreteRoute>(&locations.at(srcId), &locations.at(destId), dist, time, cost, type));
 
         if (time > stats.maxTime) stats.maxTime = time;
@@ -303,11 +299,8 @@ public:
     void findShortestPath(int startId, int goalId, const UserPreferences& prefs) const {
         using QueueElement = pair<double, int>;
         priority_queue<QueueElement, vector<QueueElement>, greater<QueueElement>> openSet;
-        map<int, int> came_from;
-        map<int, double> g_score;
-        for (const auto& pair : locations) { 
-            g_score[pair.first] = numeric_limits<double>::infinity(); 
-        }
+        map<int, int> came_from; map<int, double> g_score;
+        for (const auto& pair : locations) { g_score[pair.first] = numeric_limits<double>::infinity(); }
         g_score[startId] = 0;
         openSet.push({heuristic(locations.at(startId), locations.at(goalId)), startId});
         cout << "\n======================================================\n";
