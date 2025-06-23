@@ -306,8 +306,10 @@ public:
         return routes.size() < original_size;
     }
 
-    void deleteLocation(int id) {
-        if (!locations.count(id)) return;
+    bool deleteLocation(int id) {
+        if (!locations.count(id)) {
+            return false; // Return false if the location doesn't exist.
+        }
         locations.erase(id); // Remove the location itself
         adjList.erase(id); // Remove all routes starting from this location
         // Remove all routes pointing to this location
@@ -317,7 +319,7 @@ public:
                 return route->getDestination()->getId() == id;
             }), routes.end());
         }
-        cout << "Location ID " << id << " and all associated routes have been deleted." << endl;
+        return true; // Return true to indicate success.
     }
     
     // --- Helper and Pathfinding Methods ---
@@ -326,6 +328,27 @@ public:
         for (const auto& pair : locations) { cout << "ID: " << pair.first << " -> " << pair.second.getName() << endl; }
         cout << "---------------------------\n";
     }
+
+    void printAllRoutes() const {
+        cout << "\n--- All Routes ---\n";
+        bool routesExist = false;
+        for (const auto& pair : adjList) {
+            if (!pair.second.empty()) {
+                routesExist = true;
+                cout << "Routes from " << locations.at(pair.first).getName() << ":" << endl;
+                for (const auto& route : pair.second) {
+                    cout << "  -> To: " << route->getDestination()->getName()
+                         << " by " << transportTypeToString(route->getType())
+                         << " (Cost: " << route->getCost() << "k)" << endl;
+                }
+            }
+        }
+        if (!routesExist) {
+            cout << "No routes loaded.\n";
+        }
+        cout << "--------------------\n";
+    }
+
     bool isValidLocation(int id) const { return locations.count(id); }
 
     // MODIFIED: Returns a path object instead of just printing
@@ -558,6 +581,19 @@ void cli_deleteRoute(Graph& g) {
     }
 }
 
+void cli_showRecommendedPaths(const vector<vector<shared_ptr<const Route>>>& history, const FileManager& fm) {
+    cout << "\n--- Recommended Path History ---\n";
+    if (history.empty()) {
+        cout << "No recommendations have been made yet in this session.\n";
+    } else {
+        for (size_t i = 0; i < history.size(); ++i) {
+            cout << "--- History Item #" << i + 1 << " ---\n";
+            cout << fm.formatTxtOutput(history[i]);
+        }
+    }
+    cout << "--------------------------------\n";
+}
+
 // =================================================================================
 // 4. MAIN PROGRAM FLOW
 // =================================================================================
@@ -570,36 +606,44 @@ int main() {
     vector<vector<shared_ptr<const Route>>> pathHistory;
 
     fileManager.loadAllData(transportationSystem);
-    try {
+    
     int choice = -1;
     while(choice != 0) {
-        cout << "\n========== MAIN MENU ==========\n"
-             << "1. Add Location\n"
-             << "2. Delete Location\n"
-             << "3. Update Location\n"
-             << "4. Add Route\n"
-             << "5. Delete Route\n"
-             << "6. Recommend Me a Path\n"
-             << "7. Save LAST Recommended Path\n"
-             << "8. Save ALL Recommended Paths\n"
-             << "9. Delete a File\n"
-             << "10. Save Current Graph Data\n"
-             << "0. Exit\n"
-             << "=============================\n"
+        cout << "\n=============== MAIN MENU ===============\n"
+             << "Locations & Routes:\n"
+             << "  1. Show All Locations\n"
+             << "  2. Show All Routes\n"
+             << "  3. Add Location\n"
+             << "  4. Update Location\n"
+             << "  5. Delete Location\n"
+             << "  6. Add Route\n"
+             << "  7. Delete Route\n"
+             << "\nPathfinding & Saving:\n"
+             << "  8. Recommend a Path\n"
+             << "  9. Show Recommended Path History\n"
+             << "  10. Save LAST Recommended Path\n"
+             << "  11. Save ALL Recommended Paths\n"
+             << "\nFile Management:\n"
+             << "  12. Save Current Graph Data to File\n"
+             << "  13. Delete a File\n"
+             << "\n0. Exit\n"
+             << "=========================================\n"
              << "Enter your choice: ";
         cin >> choice;
         if (cin.fail()) {
             cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            choice = -1; // Force invalid choice
+            choice = -1;
         }
 
         switch(choice) {
-            case 1: cli_addLocation(transportationSystem); break;
-            case 2: cli_deleteLocation(transportationSystem); break;
-            case 3: cli_updateLocation(transportationSystem); break;
-            case 4: cli_addRoute(transportationSystem); break;
-            case 5: cli_deleteRoute(transportationSystem); break;
-            case 6: {
+            case 1: transportationSystem.printAllLocations(); break;
+            case 2: transportationSystem.printAllRoutes(); break;
+            case 3: cli_addLocation(transportationSystem); break;
+            case 4: cli_updateLocation(transportationSystem); break;
+            case 5: cli_deleteLocation(transportationSystem); break;
+            case 6: cli_addRoute(transportationSystem); break;
+            case 7: cli_deleteRoute(transportationSystem); break;
+            case 8: {
                 UserPreferences prefs = preferenceFinder.run();
                 transportationSystem.printAllLocations();
                 int startId=0, goalId=0;
@@ -616,47 +660,23 @@ int main() {
                 }
                 break;
             }
-            case 7: {
-                if (pathHistory.empty()) {
-                    cout << "No path has been recommended yet in this session." << endl;
-                } else {
-                    string filenameBase = "output_" + to_string(pathHistory.size());
-                    string txtContent = fileManager.formatTxtOutput(pathHistory.back());
-                    string csvContent = fileManager.formatCsvOutput(pathHistory.back());
-                    fileManager.saveOutput(filenameBase + ".txt", txtContent);
-                    fileManager.saveOutput(filenameBase + ".csv", csvContent);
-                }
-                break;
-            }
-            case 8: {
-                 if (pathHistory.empty()) {
-                    cout << "No paths have been recommended yet in this session." << endl;
-                } else {
-                    string filenameBase;
-                    cout << "Enter a base name for the files (e.g., all_routes): ";
-                    cin >> filenameBase;
-                    stringstream txt_all, csv_all;
-                    for(const auto& path : pathHistory) {
-                        txt_all << fileManager.formatTxtOutput(path);
-                        csv_all << fileManager.formatCsvOutput(path);
-                    }
-                    fileManager.saveOutput(filenameBase + ".txt", txt_all.str());
-                    fileManager.saveOutput(filenameBase + ".csv", csv_all.str());
-                }
-                break;
-            }
-            case 9: {
-                string type;
-                cout << "Delete input or output file? (input/output): "; cin >> type;
-                fileManager.listFiles(type);
-                cout << "Enter filename to delete: "; string fn; cin >> fn;
-                fileManager.deleteFile(fn);
-                break;
-            }
+            case 9: cli_showRecommendedPaths(pathHistory, fileManager); break;
             case 10: {
+                if(pathHistory.empty()){cout<<"No path recommended yet.\n";}else{string f="output_last";fileManager.saveOutput(f+".txt",fileManager.formatTxtOutput(pathHistory.back()));fileManager.saveOutput(f+".csv",fileManager.formatCsvOutput(pathHistory.back()));}
+                break;
+            }
+            case 11: {
+                if(pathHistory.empty()){cout<<"No paths recommended yet.\n";}else{string f;cout<<"Base name for files: ";cin>>f;stringstream t,c;for(const auto&p:pathHistory){t<<fileManager.formatTxtOutput(p);c<<fileManager.formatCsvOutput(p);}fileManager.saveOutput(f+".txt",t.str());fileManager.saveOutput(f+".csv",c.str());}
+                break;
+            }
+            case 12: {
                  fileManager.saveLocationsToCSV(transportationSystem, "input_locations_saved.csv");
                  fileManager.saveRoutesToCSV(transportationSystem, "input_routes_saved.csv");
                  break;
+            }
+            case 13: {
+                string t;cout<<"Delete input or output file? (input/output): ";cin>>t;fileManager.listFiles(t);cout<<"Filename to delete: ";string fn;cin>>fn;fileManager.deleteFile(fn);
+                break;
             }
             case 0: cout << "Exiting program. Goodbye!" << endl; break;
             default: cout << "Invalid choice. Please try again." << endl; break;
