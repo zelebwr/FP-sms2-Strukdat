@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Route Visualization</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map { height: 100vh; width: 100%; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        fetch('route_output.json')
+            .then(response => response.json())
+            .then(data => {
+                const map = L.map('map').setView([data[0].lat, data[0].lng], 6);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: 'Map data &copy; OpenStreetMap contributors'
+                }).addTo(map);
+
+                let latlngs = data.map(loc => [loc.lat, loc.lng]);
+
+                L.polyline(latlngs, { color: 'blue', weight: 5 }).addTo(map);
+
+                data.forEach(loc => {
+                    L.marker([loc.lat, loc.lng]).addTo(map).bindPopup(loc.name);
+                });
+            });
+    </script>
+</body>
+</html>

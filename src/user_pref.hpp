@@ -1,106 +1,77 @@
-#ifndef USERPREFERENCE_HPP
-#define USERPREFERENCE_HPP
-
-#include <iostream>
+#pragma once
 #include <string>
-#include <limits>
+#include <iostream>
+#include <map>
+#include <memory>
 
 struct UserPreference {
-    double weight_time;
-    double weight_cost;
-    double weight_distance;
+    std::string profileName;
+    double timeWeight;
+    double costWeight;
+    double distanceWeight;
+};
 
-    UserPreference(double t = 0.0, double c = 0.0, double d = 0.0)
-        : weight_time(t), weight_cost(c), weight_distance(d) {}
+struct TreeNode {
+    std::string question;
+    bool isLeaf = false;
+    UserPreference preference;
+    std::map<std::string, std::unique_ptr<TreeNode>> children;
 
-    void normalize() {
-        double total = weight_time + weight_cost + weight_distance;
-        if (total > 0) {
-            weight_time     /= total;
-            weight_cost     /= total;
-            weight_distance /= total;
+    TreeNode(std::string q) : question(q) {}
+    TreeNode(UserPreference p) : isLeaf(true), preference(p) {}
+};
+
+class DecisionTree {
+private:
+    std::unique_ptr<TreeNode> root;
+
+    void buildTree() {
+        auto fast = UserPreference{"Cepat", 10, 1, 1};
+        auto murah = UserPreference{"Murah", 2, 10, 3};
+        auto dekat = UserPreference{"Dekat", 1, 3, 10};
+
+        root = std::make_unique<TreeNode>("Apa prioritas utama Anda?");
+        root->children["1"] = std::make_unique<TreeNode>(fast);
+        root->children["2"] = std::make_unique<TreeNode>(murah);
+        root->children["3"] = std::make_unique<TreeNode>(dekat);
+    }
+
+    void printTree(const TreeNode* node, int depth = 0) const {
+        if (!node) return;
+        for (int i = 0; i < depth; ++i) std::cout << "  ";
+        if (node->isLeaf) {
+            std::cout << "-> " << node->preference.profileName << "\n";
+        } else {
+            std::cout << node->question << "\n";
+            for (const auto& [k, child] : node->children) {
+                for (int i = 0; i < depth + 1; ++i) std::cout << "  ";
+                std::cout << k << ". ";
+                printTree(child.get(), depth + 2);
+            }
         }
     }
 
-    void display() const {
-        std::cout << "Preferensi Pengguna:" << std::endl;
-        std::cout << "  - Waktu    : " << weight_time << std::endl;
-        std::cout << "  - Biaya    : " << weight_cost << std::endl;
-        std::cout << "  - Jarak    : " << weight_distance << std::endl;
-    }
-};
-
-struct Edge {
-    double time;
-    double cost;
-    double distance;
-};
-
-class PreferenceManager {
 public:
-    static UserPreference inputPreference() {
-        int choice;
-        UserPreference pref;
+    DecisionTree() { buildTree(); }
 
-        std::cout << "\n=== Pilih Preferensi Rute ===\n";
-        std::cout << "1. Tercepat (Prioritas Waktu)\n";
-        std::cout << "2. Termurah (Prioritas Biaya)\n";
-        std::cout << "3. Terdekat (Prioritas Jarak)\n";
-        std::cout << "4. Custom (Tentukan Bobot Sendiri)\n";
-        std::cout << "Pilihan Anda: ";
-        std::cin >> choice;
-
-        switch (choice) {
-            case 1:
-                pref = UserPreference(1, 0, 0);
-                break;
-            case 2:
-                pref = UserPreference(0, 1, 0);
-                break;
-            case 3:
-                pref = UserPreference(0, 0, 1);
-                break;
-            case 4:
-                std::cout << "Masukkan bobot waktu [0.0 - 1.0]: ";
-                std::cin >> pref.weight_time;
-                std::cout << "Masukkan bobot biaya [0.0 - 1.0]: ";
-                std::cin >> pref.weight_cost;
-                std::cout << "Masukkan bobot jarak [0.0 - 1.0]: ";
-                std::cin >> pref.weight_distance;
-                break;
-            default:
-                std::cout << "Pilihan tidak valid. Menggunakan default (tercepat).\n";
-                pref = UserPreference(1, 0, 0);
-                break;
+    UserPreference run() const {
+        TreeNode* current = root.get();
+        std::string input;
+        while (!current->isLeaf) {
+            std::cout << current->question << "\n";
+            for (const auto& [key, node] : current->children) {
+                std::cout << "  " << key << ". " << node->preference.profileName << "\n";
+            }
+            std::cout << "Masukkan pilihan (angka): ";
+            std::cin >> input;
+            if (current->children.count(input)) {
+                current = current->children.at(input).get();
+            } else {
+                std::cout << "Pilihan tidak valid, coba lagi.\n";
+            }
         }
-
-        pref.normalize();
-        return pref;
+        return current->preference;
     }
 
-    static double calculateWeightedCost(const Edge& edge, const UserPreference& pref) {
-        return (pref.weight_time     * edge.time) +
-               (pref.weight_cost     * edge.cost) +
-               (pref.weight_distance * edge.distance);
-    }
+    void visualize() const { printTree(root.get()); }
 };
-
-#endif
-
-/*
-#include <iostream>
-#include "UserPreference.hpp"
-
-int main() {
-    UserPreference pref = PreferenceManager::inputPreference();
-    pref.display();
-
-    // Contoh edge
-    Edge edge = { 20.0, 10000.0, 8.0 }; // waktu: 20 menit, biaya: 10.000, jarak: 8 km
-
-    double score = PreferenceManager::calculateWeightedCost(edge, pref);
-    std::cout << "\nSkor total edge (berdasarkan preferensi): " << score << std::endl;
-
-    return 0;
-}
-*/
