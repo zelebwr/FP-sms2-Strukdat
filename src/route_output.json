@@ -1,0 +1,27 @@
+[
+    {
+        "lat": -6.2,
+        "lng": 106.8,
+        "name": "Jakarta"
+    },
+    {
+        "lat": -6.9,
+        "lng": 107.6,
+        "name": "Bandung"
+    },
+    {
+        "lat": -7.2,
+        "lng": 112.7,
+        "name": "Surabaya"
+    },
+    {
+        "lat": -7.98,
+        "lng": 112.63,
+        "name": "Malang"
+    },
+    {
+        "lat": -8.2,
+        "lng": 114.4,
+        "name": "Banyuwangi"
+    }
+]
