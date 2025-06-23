@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <limits>
 #include <cmath>
+#include <algorithm>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 using namespace std;
@@ -29,8 +31,19 @@ struct TreeNode; // Node for our Decision Tree
 class DecisionTree;
 
 // Using enums makes the code safer and more readable
-enum class TransportationType { BUS, TRAIN, BOAT, PLANE };
-enum class TransportationClass { ECONOMY, EXECUTIVE, BUSINESS, FIRST_CLASS };
+enum class TransportationType { ANY, BUS, TRAIN, BOAT, PLANE };
+
+// Helper to convert enum to string for printing
+string transportTypeToString(TransportationType type) {
+    switch (type) {
+        case TransportationType::BUS: return "Bus";
+        case TransportationType::TRAIN: return "Train";
+        case TransportationType::BOAT: return "Boat";
+        case TransportationType::PLANE: return "Plane";
+        case TransportationType::ANY: return "Any";
+    }
+    return "Unknown";
+}
 
 /**
  * @struct UserPreferences
@@ -41,12 +54,13 @@ struct UserPreferences {
     double timeWeight = 1.0;
     double costWeight = 1.0;
     double distanceWeight = 1.0;
+    TransportationType preferredTransport = TransportationType::ANY;
 };
 
 struct GraphStats {
-    double maxTime = 1e-9;
-    double maxCost = 1e-9;
-    double maxDistance = 1e-9;
+    double maxTime = 1.0;
+    double maxCost = 1.0;
+    double maxDistance = 1.0;
 };
 
 // =================================================================================
@@ -67,7 +81,7 @@ struct TreeNode {
     // Using unique_ptr for automatic memory management of child nodes.
     map<string, unique_ptr<TreeNode>> children;
 
-    TreeNode(string q) : question(q) {} // Constructor for question nodes
+    TreeNode(string q) : question(move(q)) {} // Constructor for question nodes
     TreeNode(UserPreferences prefs) : isLeaf(true), preferences(move(prefs)) {} // Constructor for leaf nodes
 };
 
@@ -84,10 +98,10 @@ private:
         auto balanced = UserPreferences{"Balanced Traveler", 5.0, 5.0, 5.0};
         auto business = UserPreferences{"Business Traveler", 10.0, 2.0, 1.0};
         
-        root = std::make_unique<TreeNode>("What is your main priority for this trip?");
-        root->children["1. Fastest Time"] = std::make_unique<TreeNode>(business);
-        root->children["2. Lowest Cost"] = std::make_unique<TreeNode>(budget);
-        root->children["3. A Balanced Approach"] = std::make_unique<TreeNode>(balanced);
+        root = make_unique<TreeNode>("What is your main priority for this trip?");
+        root->children["1. Fastest Time"] = make_unique<TreeNode>(business);
+        root->children["2. Lowest Cost"] = make_unique<TreeNode>(budget);
+        root->children["3. A Balanced Approach"] = make_unique<TreeNode>(balanced);
     }
 
     // A helper function for visualizing the tree recursively
@@ -120,39 +134,40 @@ public:
      * @return The UserPreferences object determined by the user's answers.
      */
     UserPreferences run() const {
-        cout << "\n--- Let's Find Your Travel Style! ---\n";
-        TreeNode* currentNode = root.get();
+        cout<<"\n--- Let's Find Your Travel Style! ---\n";
+        const TreeNode* currentNode = root.get();
         string answer;
 
-        while (!currentNode->isLeaf) {
-            cout << "\nQ: " << currentNode->question << endl;
-            for (const auto& pair : currentNode->children) {
-                cout << "   " << pair.first << endl;
-            }
-            cout << "Your choice: ";
-            cin >> answer;
-
-            if (currentNode->children.count(answer)) {
-                currentNode = currentNode->children.at(answer).get();
-            } else {
-                cout << "Invalid choice, please try again." << endl;
-            }
+        while(!currentNode->isLeaf){
+            cout<<"\nQ: "<<currentNode->question<<"\n";
+            for(const auto& p : currentNode->children){ cout<<"   "<<p.first<<"\n"; }
+            cout<<"Your choice: ";
+            cin>>answer;
+            if(currentNode->children.count(answer)){ currentNode = currentNode->children.at(answer).get(); }
+            else{ cout<<"Invalid choice, try again.\n"; }
         }
+        
+        UserPreferences finalPrefs = currentNode->preferences;
+        cout<<"\nProfile set to: "<<finalPrefs.profileName<<"\n";
 
-        cout << "\n---------------------------------------\n";
-        cout << "Great! We've determined your profile is: " << currentNode->preferences.profileName << endl;
-        cout << "---------------------------------------\n";
-        return currentNode->preferences;
-    }
+        cout << "\nWhich mode of transport do you prefer?\n";
+        cout << "1. Train\n";
+        cout << "2. Bus\n";
+        cout << "3. Plane\n";
+        cout << "4. Any (no preference)\n";
+        cout << "Your choice: ";
+        cin >> answer;
 
-    /**
-     * @brief Prints a textual representation of the decision tree structure.
-     */
-    void visualize() const {
-        cout << "\n--- Decision Tree Structure ---\n";
-        printTree(root.get(), 0);
-        cout << "-----------------------------\n";
+        if (answer == "1") finalPrefs.preferredTransport = TransportationType::TRAIN;
+        else if (answer == "2") finalPrefs.preferredTransport = TransportationType::BUS;
+        else if (answer == "3") finalPrefs.preferredTransport = TransportationType::PLANE;
+        else finalPrefs.preferredTransport = TransportationType::ANY;
+
+        cout << "Transportation preference set to: " << transportTypeToString(finalPrefs.preferredTransport) << endl;
+        
+        return finalPrefs;
     }
+    void visualize() const {cout<<"\n--- Decision Tree Structure ---\n"; printTree(root.get(),0); cout<<"-----------------------------\n";}
 };
 
 
@@ -171,6 +186,8 @@ public:
         :id(id),name(n),latitude(lat),longitude(lon){}
     int getId() const {return id;}
     string getName() const {return name;}
+    double getLatitude() const { return latitude; }
+    double getLongitude() const { return longitude; }
 };
 
 class Route { /* ... same as before ... */
@@ -180,49 +197,133 @@ protected:
     double distance; 
     double time; 
     double cost;
+    TransportationType type;
+
 public: 
-    Route(Location* s, Location* d, double dist, double t, double c)
-        :source(s),destination(d),distance(dist),time(t),cost(c){}
-    virtual ~Route(){} virtual double calculateWeight(const UserPreferences& p) const = 0;
+    Route(Location* s, Location* d, double dist, double t, double c, TransportationType tp)
+        : source(s), destination(d), distance(dist), time(t), cost(c), type(tp) {}
+    virtual ~Route() = default;
+    virtual double calculateWeight(const UserPreferences& p, const GraphStats& stats) const = 0;
     Location* getDestination() const { return destination; }
+    double getDistance() const { return distance; }
+    double getTime() const { return time; }
+    double getCost() const { return cost; }
+    TransportationType getType() const { return type; }
 };
 
 class ConcreteRoute : public Route { /* ... same as before ... */
 public: 
-    ConcreteRoute(Location* s, Location* d, double dist, double t, double c)
-        :Route(s,d,dist,t,c){}
-    
-    double calculateWeight(const UserPreferences& prefs) const override {
-    // NOTE: In a real system, you would NORMALIZE these values first!
-    return (time * prefs.timeWeight) + (cost * prefs.costWeight) + (distance * prefs.distanceWeight);
-}
+    ConcreteRoute(Location* s, Location* d, double dist, double t, double c, TransportationType tp)
+        : Route(s, d, dist, t, c, tp) {}
+
+    double calculateWeight(const UserPreferences& prefs, const GraphStats& stats) const override {
+        double normTime = time / stats.maxTime;
+        double normCost = cost / stats.maxCost;
+        double normDist = distance / stats.maxDistance;
+
+        double baseWeight = (normTime * prefs.timeWeight) + (normCost * prefs.costWeight) + (normDist * prefs.distanceWeight);
+
+        if (prefs.preferredTransport != TransportationType::ANY && this->type != prefs.preferredTransport) {
+            baseWeight += 1000.0; // A large penalty to deprioritize this route
+        }
+
+        return baseWeight;
+    }
 };
 
 class Graph { /* ... same as before, simplified for clarity ... */
 private: 
-    map<int, Location> locations; 
-    map<int, vector<unique_ptr<Route>>> adjList; 
-    int nextId=1;
-    
-public:
-    void addLocation(const string& n, double lat, double lon){
-        int id=nextId++; 
-        locations[id]=Location(id,n,lat,lon); 
-        adjList[id]={}; 
+    map<int, Location> locations;
+    map<int, vector<unique_ptr<Route>>> adjList;
+    GraphStats stats;
+    int nextId = 1;
+
+    double heuristic(const Location& a, const Location& b) const {
+        const double R=6371.0; 
+        double lat1=a.getLatitude()*M_PI/180.0; 
+        double lon1=a.getLongitude()*M_PI/180.0; 
+        double lat2=b.getLatitude()*M_PI/180.0; 
+        double lon2=b.getLongitude()*M_PI/180.0;
+        double dlon=lon2-lon1; 
+        double dlat=lat2-lat1; 
+        double val=pow(sin(dlat/2),2)+cos(lat1)*cos(lat2)*pow(sin(dlon/2),2); 
+        double c=2*asin(sqrt(val)); 
+        return R*c;
     }
-    void addRoute(int sId, int dId, double d, double t, double c){
-        if(!locations.count(sId) || !locations.count(dId)) return;
-        adjList.at(sId).push_back(make_unique<ConcreteRoute>(&locations.at(sId),&locations.at(dId),d,t,c));
-    }
-    void findShortestPath(int startId, int goalId, const UserPreferences& prefs) const {
-        cout << "\n======================================================\n";
-        cout << "Finding route for profile: " << prefs.profileName << "\n";
-        cout << "Searching path from " << locations.at(startId).getName() << " to " << locations.at(goalId).getName() << "...\n";
-        cout << "A* algorithm would run here using the calculated weights.\n";
+
+    void reconstructAndPrintPath(const map<int, int>& came_from, int currentId) const {
+        vector<int> total_path; total_path.push_back(currentId);
+        while (came_from.count(currentId)) { currentId = came_from.at(currentId); total_path.push_back(currentId); }
+        reverse(total_path.begin(), total_path.end());
+
+        cout << "\nBest Route Found:\n";
+        double totalTime = 0, totalCost = 0, totalDist = 0;
+        for (size_t i = 0; i < total_path.size() - 1; ++i) {
+            int fromId = total_path[i]; int toId = total_path[i+1]; const Route* routeTaken = nullptr;
+            for (const auto& r : adjList.at(fromId)) { if (r->getDestination()->getId() == toId) { routeTaken = r.get(); break; } }
+            if (routeTaken) {
+                cout << "  " << i + 1 << ". From " << locations.at(fromId).getName()
+                          << " to " << locations.at(toId).getName()
+                          << " by " << transportTypeToString(routeTaken->getType()) // MODIFIED: Show transport type
+                          << " (Time: " << routeTaken->getTime() << "m, Cost: " << routeTaken->getCost() << "k"
+                          << ", Dist: " << routeTaken->getDistance() << "m)\n";
+                totalTime += routeTaken->getTime(); totalCost += routeTaken->getCost(); totalDist += routeTaken->getDistance();
+            }
+        }
+        cout << "------------------------------------------------------\n";
+        cout << "Total Trip -> Time: " << totalTime << " minutes, "
+                  << "Cost: Rp " << fixed << setprecision(3) << (totalCost * 1000)
+                  << ", Distance: " << totalDist << " meters\n";
         cout << "======================================================\n\n";
     }
-};
+    
+public:
+void addLocation(const string& name, double lat, double lon) {
+        int id = nextId++;
+        locations[id] = Location(id, name, lat, lon);
+        adjList[id] = {};
+    }
 
+    void addRoute(int srcId, int destId, double dist, double time, double cost, TransportationType type) {
+        if (!locations.count(srcId) || !locations.count(destId)) return;
+        adjList.at(srcId).push_back(make_unique<ConcreteRoute>(&locations.at(srcId), &locations.at(destId), dist, time, cost, type));
+
+        if (time > stats.maxTime) stats.maxTime = time;
+        if (cost > stats.maxCost) stats.maxCost = cost;
+        if (dist > stats.maxDistance) stats.maxDistance = dist;
+    }
+
+    void findShortestPath(int startId, int goalId, const UserPreferences& prefs) const {
+        using QueueElement = pair<double, int>;
+        priority_queue<QueueElement, vector<QueueElement>, greater<QueueElement>> openSet;
+        map<int, int> came_from;
+        map<int, double> g_score;
+        for (const auto& pair : locations) { 
+            g_score[pair.first] = numeric_limits<double>::infinity(); 
+        }
+        g_score[startId] = 0;
+        openSet.push({heuristic(locations.at(startId), locations.at(goalId)), startId});
+        cout << "\n======================================================\n";
+        cout << "Searching path for profile: " << prefs.profileName << " (" << transportTypeToString(prefs.preferredTransport) << " preferred)...\n";
+        while (!openSet.empty()) {
+            int currentId = openSet.top().second; openSet.pop();
+            if (currentId == goalId) { reconstructAndPrintPath(came_from, currentId); return; }
+            if (adjList.count(currentId)) {
+                for (const auto& route : adjList.at(currentId)) {
+                    int neighborId = route->getDestination()->getId();
+                    double tentative_g_score = g_score.at(currentId) + route->calculateWeight(prefs, stats);
+                    if (tentative_g_score < g_score.at(neighborId)) {
+                        came_from[neighborId] = currentId;
+                        g_score[neighborId] = tentative_g_score;
+                        double f_score = g_score.at(neighborId) + heuristic(locations.at(neighborId), locations.at(goalId));
+                        openSet.push({f_score, neighborId});
+                    }
+                }
+            }
+        }
+        cout << "No path found from " << locations.at(startId).getName() << " to " << locations.at(goalId).getName() << ".\n";
+    }
+};
 
 // =================================================================================
 // 4. MAIN PROGRAM FLOW
@@ -230,27 +331,28 @@ public:
 
 int main() {
     try {
-        // --- Step 1: Setup the Graph and Decision Tree ---
         Graph transportationSystem;
         DecisionTree preferenceFinder;
 
-        // Populate the graph (this would normally be from a file)
-        transportationSystem.addLocation("Jakarta (JKT)", -6.17, 106.82);
-        transportationSystem.addLocation("Bandung (BDO)", -6.91, 107.61);
-        transportationSystem.addLocation("Surabaya (SUB)", -7.25, 112.75);
-        transportationSystem.addRoute(1, 2, 150, 3.0, 150000); // JKT -> BDO
-        transportationSystem.addRoute(1, 3, 780, 1.5, 900000); // JKT -> SUB (Plane)
-        transportationSystem.addRoute(2, 3, 650, 10.0, 400000); // BDO -> SUB
+        // --- Setup the Graph with sample data (MODIFIED to include transport types) ---
+        transportationSystem.addLocation("Jakarta (JKT)", -6.1751, 106.8650);
+        transportationSystem.addLocation("Bandung (BDO)", -6.9175, 107.6191);
+        transportationSystem.addLocation("Surabaya (SUB)", -7.2575, 112.7521);
+        transportationSystem.addLocation("Denpasar (DPS)", -8.6700, 115.2124);
+        transportationSystem.addLocation("Semarang (SRG)", -6.9667, 110.4381);
 
-        // --- Step 2: Visualize the Decision Tree Structure (as required) ---
+        // time in minutes, distance in meters, cost in Thousand Rupiah
+        transportationSystem.addRoute(1, 2, 150000.0, 180.0, 150.0, TransportationType::TRAIN);
+        transportationSystem.addRoute(1, 5, 500000.0, 360.0, 300.0, TransportationType::TRAIN);
+        transportationSystem.addRoute(2, 3, 650000.0, 600.0, 400.0, TransportationType::TRAIN);
+        transportationSystem.addRoute(5, 3, 350000.0, 300.0, 150.5, TransportationType::BUS);
+        transportationSystem.addRoute(3, 4, 430000.0, 60.0, 700.0, TransportationType::PLANE);
+        transportationSystem.addRoute(1, 4, 1180000.0, 114.0, 1200.0, TransportationType::PLANE);
+
+
         preferenceFinder.visualize();
-
-        // --- Step 3: Run the Decision Tree to get user's preferences ---
         UserPreferences userPrefs = preferenceFinder.run();
-
-        // --- Step 4: Use the determined preferences to find the best route ---
-        // The `userPrefs` object is the bridge between the two data structures.
-        transportationSystem.findShortestPath(1, 3, userPrefs); // Find path from Jakarta to Surabaya
+        transportationSystem.findShortestPath(1, 4, userPrefs);
 
     } catch (const exception& e) {
         cerr << "An error occurred: " << e.what() << endl;
