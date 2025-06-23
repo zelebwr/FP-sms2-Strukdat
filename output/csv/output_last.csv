@@ -1,0 +1,3 @@
+start_id,start_name,end_id,end_name,type,time,cost,dist
+20,Mataram,2,Surabaya,Plane,335.84,284.84,245077
+2,Surabaya,13,Bandar Lampung,Bus,85.56,48.91,78105.6

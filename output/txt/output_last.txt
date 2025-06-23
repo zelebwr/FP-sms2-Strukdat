@@ -1,0 +1,18 @@
+========================================
+      R E C O M M E N D E D   R O U T E
+========================================
+From: Mataram
+To:   Bandar Lampung
+
+--- Steps ---
+  1. From Mataram to Surabaya by Plane
+     (Time: 335.84m, Cost: 284.84k, Dist: 245077m)
+  2. From Surabaya to Bandar Lampung by Bus
+     (Time: 85.56m, Cost: 48.91k, Dist: 78105.6m)
+
+--- Summary ---
+  Total Time:     421.4 min
+  Total Distance: 323183 m
+  Total Cost:     Rp 333750.000
+========================================
+
