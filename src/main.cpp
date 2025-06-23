@@ -10,6 +10,12 @@
 #include <fstream>
 #include <sstream>
 using namespace std;
+
+// Define M_PI if it's not defined by the cmath header on some compilers
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 // =================================================================================
 // 1. FORWARD DECLARATIONS & CORE DATA TYPES
 // =================================================================================
@@ -37,6 +43,11 @@ struct UserPreferences {
     double distanceWeight = 1.0;
 };
 
+struct GraphStats {
+    double maxTime = 1e-9;
+    double maxCost = 1e-9;
+    double maxDistance = 1e-9;
+};
 
 // =================================================================================
 // 2. DECISION TREE IMPLEMENTATION
@@ -57,7 +68,7 @@ struct TreeNode {
     map<string, unique_ptr<TreeNode>> children;
 
     TreeNode(string q) : question(q) {} // Constructor for question nodes
-    TreeNode(UserPreferences prefs) : isLeaf(true), preferences(prefs) {} // Constructor for leaf nodes
+    TreeNode(UserPreferences prefs) : isLeaf(true), preferences(move(prefs)) {} // Constructor for leaf nodes
 };
 
 /**
@@ -67,6 +78,17 @@ struct TreeNode {
 class DecisionTree {
 private:
     unique_ptr<TreeNode> root;
+
+    void buildTree() {
+        auto budget = UserPreferences{"Budget Traveler", 1.0, 10.0, 3.0};
+        auto balanced = UserPreferences{"Balanced Traveler", 5.0, 5.0, 5.0};
+        auto business = UserPreferences{"Business Traveler", 10.0, 2.0, 1.0};
+        
+        root = std::make_unique<TreeNode>("What is your main priority for this trip?");
+        root->children["1. Fastest Time"] = std::make_unique<TreeNode>(business);
+        root->children["2. Lowest Cost"] = std::make_unique<TreeNode>(budget);
+        root->children["3. A Balanced Approach"] = std::make_unique<TreeNode>(balanced);
+    }
 
     // A helper function for visualizing the tree recursively
     void printTree(const TreeNode* node, int indent) const {
@@ -91,40 +113,6 @@ private:
 public:
     DecisionTree() {
         buildTree();
-    }
-
-    /**
-     * @brief Constructs the static decision tree with all questions and outcomes.
-     */
-    void buildTree() {
-        // Define final outcomes (leaf nodes)
-        auto budgetTraveler = UserPreferences{"Budget Traveler", 1.0, 10.0, 3.0};
-        auto balancedTraveler = UserPreferences{"Balanced Traveler", 5.0, 5.0, 5.0};
-        auto businessTraveler = UserPreferences{"Business Traveler", 10.0, 2.0, 1.0};
-        auto scenicExplorer = UserPreferences{"Scenic Explorer", 2.0, 4.0, 10.0};
-
-        // Create the tree structure from the bottom up
-        root = make_unique<TreeNode>("What is your main priority for this trip?");
-        
-        // Branch 1: Time is most important
-        auto timeNode = make_unique<TreeNode>("You prioritize speed. Is budget a major concern?");
-        timeNode->children["1. Yes, budget is tight."] = make_unique<TreeNode>(balancedTraveler);
-        timeNode->children["2. No, speed is everything."] = make_unique<TreeNode>(businessTraveler);
-
-        // Branch 2: Cost is most important
-        auto costNode = make_unique<TreeNode>("You prioritize low cost. Are you completely flexible on time?");
-        costNode->children["1. Yes, I have plenty of time."] = make_unique<TreeNode>(budgetTraveler);
-        costNode->children["2. No, I still need a reasonable travel time."] = make_unique<TreeNode>(balancedTraveler);
-        
-        // Branch 3: Scenery/Distance is most important
-        auto distanceNode = make_unique<TreeNode>("You want to explore. Do you prefer a direct route or one with more stops?");
-        distanceNode->children["1. A direct, scenic route."] = make_unique<TreeNode>(scenicExplorer);
-        distanceNode->children["2. A balanced approach is fine."] = make_unique<TreeNode>(balancedTraveler);
-
-        // Connect branches to the root
-        root->children["1. Fastest time"] = move(timeNode);
-        root->children["2. Lowest cost"] = move(costNode);
-        root->children["3. Shortest distance / Most scenic"] = move(distanceNode);
     }
 
     /**
@@ -173,30 +161,55 @@ public:
 // =================================================================================
 
 class Location { /* ... same as before ... */
-private: int id; string name; double latitude; double longitude;
-public: Location(int id=0, string n="", double lat=0.0, double lon=0.0):id(id),name(n),latitude(lat),longitude(lon){}
-int getId() const {return id;} string getName() const {return name;}
+private: 
+    int id; 
+    string name; 
+    double latitude; 
+    double longitude;
+public: 
+    Location(int id=0, string n="", double lat=0.0, double lon=0.0)
+        :id(id),name(n),latitude(lat),longitude(lon){}
+    int getId() const {return id;}
+    string getName() const {return name;}
 };
 
 class Route { /* ... same as before ... */
-protected: Location* source; Location* destination; double distance; double time; double cost;
-public: Route(Location* s, Location* d, double dist, double t, double c):source(s),destination(d),distance(dist),time(t),cost(c){}
-virtual ~Route(){} virtual double calculateWeight(const UserPreferences& p) const = 0;
-Location* getDestination() const { return destination; }
+protected: 
+    Location* source; 
+    Location* destination; 
+    double distance; 
+    double time; 
+    double cost;
+public: 
+    Route(Location* s, Location* d, double dist, double t, double c)
+        :source(s),destination(d),distance(dist),time(t),cost(c){}
+    virtual ~Route(){} virtual double calculateWeight(const UserPreferences& p) const = 0;
+    Location* getDestination() const { return destination; }
 };
 
 class ConcreteRoute : public Route { /* ... same as before ... */
-public: ConcreteRoute(Location* s, Location* d, double dist, double t, double c):Route(s,d,dist,t,c){}
-double calculateWeight(const UserPreferences& prefs) const override {
+public: 
+    ConcreteRoute(Location* s, Location* d, double dist, double t, double c)
+        :Route(s,d,dist,t,c){}
+    
+    double calculateWeight(const UserPreferences& prefs) const override {
     // NOTE: In a real system, you would NORMALIZE these values first!
     return (time * prefs.timeWeight) + (cost * prefs.costWeight) + (distance * prefs.distanceWeight);
 }
 };
 
 class Graph { /* ... same as before, simplified for clarity ... */
-private: map<int, Location> locations; map<int, vector<unique_ptr<Route>>> adjList; int nextId=1;
+private: 
+    map<int, Location> locations; 
+    map<int, vector<unique_ptr<Route>>> adjList; 
+    int nextId=1;
+    
 public:
-    void addLocation(const string& n, double lat, double lon){ int id=nextId++; locations[id]=Location(id,n,lat,lon); adjList[id]={}; }
+    void addLocation(const string& n, double lat, double lon){
+        int id=nextId++; 
+        locations[id]=Location(id,n,lat,lon); 
+        adjList[id]={}; 
+    }
     void addRoute(int sId, int dId, double d, double t, double c){
         if(!locations.count(sId) || !locations.count(dId)) return;
         adjList.at(sId).push_back(make_unique<ConcreteRoute>(&locations.at(sId),&locations.at(dId),d,t,c));
