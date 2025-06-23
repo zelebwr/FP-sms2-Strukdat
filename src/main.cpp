@@ -479,22 +479,35 @@ public:
         cout << "Routes saved to " << filename << endl;
     }
     
-    string formatTxtOutput(const vector<shared_ptr<const Route>>& path) { /* ... same as before ... */
-        if(path.empty())return "No path."; stringstream ss; double tT=0,tC=0,tD=0;
-        ss<<"========================================\n"; ss<<"      R E C O M M E N D E D   R O U T E\n"; ss<<"========================================\n";
-        ss<<"From: "<<path.front()->getSource()->getName()<<"\n"; ss<<"To:   "<<path.back()->getDestination()->getName()<<"\n\n"; ss<<"--- Steps ---\n";
-        for(size_t i=0;i<path.size();++i){const auto& r=path[i]; ss<<"  "<<i+1<<". From "<<r->getSource()->getName()<<" to "<<r->getDestination()->getName()<<" by "<<transportTypeToString(r->getType())<<"\n     (Time: "<<r->getTime()<<"m, Cost: "<<r->getCost()<<"k, Dist: "<<r->getDistance()<<"m)\n";tT+=r->getTime();tC+=r->getCost();tD+=r->getDistance();}
-        ss<<"\n--- Summary ---\n"; ss<<"  Total Time:     "<<tT<<" min\n"; ss<<"  Total Distance: "<<tD<<" m\n"; ss<<"  Total Cost:     Rp "<<fixed<<setprecision(3)<<(tC*1000)<<"\n"; ss<<"========================================\n"; return ss.str();
-    }
-    
-    string formatCsvOutput(const vector<shared_ptr<const Route>>& path) {
-        stringstream ss;
-        ss << "start_location_id,start_location_name,end_location_id,end_location_name,transport_type,time_minutes,cost_k_rp,distance_meters\n";
-        for (const auto& r : path) {
-            ss << r->getSource()->getId() << "," << r->getSource()->getName() << "," << r->getDestination()->getId() << "," << r->getDestination()->getName()
-               << "," << transportTypeToString(r->getType()) << "," << r->getTime() << "," << r->getCost() << "," << r->getDistance() << "\n";
+    string formatTxtOutput(const vector<shared_ptr<const Route>>& p) const {
+        if(p.empty()) return "No path."; 
+        stringstream s; 
+        double tT=0,tC=0,tD=0;
+        s<<"========================================\n"; 
+        s<<"      R E C O M M E N D E D   R O U T E\n"; 
+        s<<"========================================\n";
+        s<<"From: "<<p.front()->getSource()->getName()<<"\n"; 
+        s<<"To:   "<<p.back()->getDestination()->getName()<<"\n\n"; 
+        s<<"--- Steps ---\n";
+        for(size_t i=0; i<p.size(); ++i){
+            const auto& r=p[i];
+            s<<"  "<<i+1<<". From "<<r->getSource()->getName()<<" to "<<r->getDestination()->getName()<<" by "<<transportTypeToString(r->getType())<<"\n     (Time: "<<r->getTime()<<"m, Cost: "<<r->getCost()<<"k, Dist: "<<r->getDistance()<<"m)\n";
+            tT+=r->getTime();
+            tC+=r->getCost();
+            tD+=r->getDistance();
         }
-        return ss.str();
+        s<<"\n--- Summary ---\n"; s<<"  Total Time:     "<<tT<<" min\n"; 
+        s<<"  Total Distance: "<<tD<<" m\n"; 
+        s<<"  Total Cost:     Rp "<<fixed<<setprecision(3)<<(tC*1000)<<"\n"; 
+        s<<"========================================\n"; return s.str();
+    }
+    string formatCsvOutput(const vector<shared_ptr<const Route>>& p) const {
+        stringstream s;
+        s<<"start_location_id,start_location_name,end_location_id,end_location_name,transport_type,time_minutes,cost_k_rp,distance_meters\n";
+        for(const auto& r:p){
+            s<<r->getSource()->getId()<<","<<r->getSource()->getName()<<","<<r->getDestination()->getId()<<","<<r->getDestination()->getName()<<","<<transportTypeToString(r->getType())<<","<<r->getTime()<<","<<r->getCost()<<","<<r->getDistance()<<"\n";
+        }
+        return s.str();
     }
 
     void saveOutput(const string& filename, const string& content, bool append = false) { /* ... same as before ... */
@@ -605,83 +618,83 @@ int main() {
 
     vector<vector<shared_ptr<const Route>>> pathHistory;
 
-    fileManager.loadAllData(transportationSystem);
-    
-    int choice = -1;
-    while(choice != 0) {
-        cout << "\n=============== MAIN MENU ===============\n"
-             << "Locations & Routes:\n"
-             << "  1. Show All Locations\n"
-             << "  2. Show All Routes\n"
-             << "  3. Add Location\n"
-             << "  4. Update Location\n"
-             << "  5. Delete Location\n"
-             << "  6. Add Route\n"
-             << "  7. Delete Route\n"
-             << "\nPathfinding & Saving:\n"
-             << "  8. Recommend a Path\n"
-             << "  9. Show Recommended Path History\n"
-             << "  10. Save LAST Recommended Path\n"
-             << "  11. Save ALL Recommended Paths\n"
-             << "\nFile Management:\n"
-             << "  12. Save Current Graph Data to File\n"
-             << "  13. Delete a File\n"
-             << "\n0. Exit\n"
-             << "=========================================\n"
-             << "Enter your choice: ";
-        cin >> choice;
-        if (cin.fail()) {
-            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            choice = -1;
-        }
+    try {
+        fileManager.loadAllData(transportationSystem);
+        int choice = -1;
+        while(choice != 0) {
+            cout << "\n=============== MAIN MENU ===============\n"
+                << "Locations & Routes:\n"
+                << "  1. Show All Locations\n"
+                << "  2. Show All Routes\n"
+                << "  3. Add Location\n"
+                << "  4. Update Location\n"
+                << "  5. Delete Location\n"
+                << "  6. Add Route\n"
+                << "  7. Delete Route\n"
+                << "\nPathfinding & Saving:\n"
+                << "  8. Recommend a Path\n"
+                << "  9. Show Recommended Path History\n"
+                << "  10. Save LAST Recommended Path\n"
+                << "  11. Save ALL Recommended Paths\n"
+                << "\nFile Management:\n"
+                << "  12. Save Current Graph Data to File\n"
+                << "  13. Delete a File\n"
+                << "\n0. Exit\n"
+                << "=========================================\n"
+                << "Enter your choice: ";
+            cin >> choice;
+            if (cin.fail()) {
+                cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                choice = -1;
+            }
 
-        switch(choice) {
-            case 1: transportationSystem.printAllLocations(); break;
-            case 2: transportationSystem.printAllRoutes(); break;
-            case 3: cli_addLocation(transportationSystem); break;
-            case 4: cli_updateLocation(transportationSystem); break;
-            case 5: cli_deleteLocation(transportationSystem); break;
-            case 6: cli_addRoute(transportationSystem); break;
-            case 7: cli_deleteRoute(transportationSystem); break;
-            case 8: {
-                UserPreferences prefs = preferenceFinder.run();
-                transportationSystem.printAllLocations();
-                int startId=0, goalId=0;
-                cout << "Enter Start ID: "; cin >> startId;
-                cout << "Enter Goal ID: "; cin >> goalId;
-                if(transportationSystem.isValidLocation(startId) && transportationSystem.isValidLocation(goalId)) {
-                    vector<shared_ptr<const Route>> path = transportationSystem.findShortestPath(startId, goalId, prefs);
-                    if (!path.empty()) {
-                        pathHistory.push_back(path);
-                        cout << fileManager.formatTxtOutput(path);
+            switch(choice) {
+                case 1: transportationSystem.printAllLocations(); break;
+                case 2: transportationSystem.printAllRoutes(); break;
+                case 3: cli_addLocation(transportationSystem); break;
+                case 4: cli_updateLocation(transportationSystem); break;
+                case 5: cli_deleteLocation(transportationSystem); break;
+                case 6: cli_addRoute(transportationSystem); break;
+                case 7: cli_deleteRoute(transportationSystem); break;
+                case 8: {
+                    UserPreferences prefs = preferenceFinder.run();
+                    transportationSystem.printAllLocations();
+                    int startId=0, goalId=0;
+                    cout << "Enter Start ID: "; cin >> startId;
+                    cout << "Enter Goal ID: "; cin >> goalId;
+                    if(transportationSystem.isValidLocation(startId) && transportationSystem.isValidLocation(goalId)) {
+                        vector<shared_ptr<const Route>> path = transportationSystem.findShortestPath(startId, goalId, prefs);
+                        if (!path.empty()) {
+                            pathHistory.push_back(path);
+                            cout << fileManager.formatTxtOutput(path);
+                        }
+                    } else {
+                        cout << "Invalid location ID(s).\n";
                     }
-                } else {
-                    cout << "Invalid location ID(s).\n";
+                    break;
                 }
-                break;
+                case 9: cli_showRecommendedPaths(pathHistory, fileManager); break;
+                case 10: {
+                    if(pathHistory.empty()){cout<<"No path recommended yet.\n";}else{string f="output_last";fileManager.saveOutput(f+".txt",fileManager.formatTxtOutput(pathHistory.back()));fileManager.saveOutput(f+".csv",fileManager.formatCsvOutput(pathHistory.back()));}
+                    break;
+                }
+                case 11: {
+                    if(pathHistory.empty()){cout<<"No paths recommended yet.\n";}else{string f;cout<<"Base name for files: ";cin>>f;stringstream t,c;for(const auto&p:pathHistory){t<<fileManager.formatTxtOutput(p);c<<fileManager.formatCsvOutput(p);}fileManager.saveOutput(f+".txt",t.str());fileManager.saveOutput(f+".csv",c.str());}
+                    break;
+                }
+                case 12: {
+                    fileManager.saveLocationsToCSV(transportationSystem, "input_locations_saved.csv");
+                    fileManager.saveRoutesToCSV(transportationSystem, "input_routes_saved.csv");
+                    break;
+                }
+                case 13: {
+                    string t;cout<<"Delete input or output file? (input/output): ";cin>>t;fileManager.listFiles(t);cout<<"Filename to delete: ";string fn;cin>>fn;fileManager.deleteFile(fn);
+                    break;
+                }
+                case 0: cout << "Exiting program. Goodbye!" << endl; break;
+                default: cout << "Invalid choice. Please try again." << endl; break;
             }
-            case 9: cli_showRecommendedPaths(pathHistory, fileManager); break;
-            case 10: {
-                if(pathHistory.empty()){cout<<"No path recommended yet.\n";}else{string f="output_last";fileManager.saveOutput(f+".txt",fileManager.formatTxtOutput(pathHistory.back()));fileManager.saveOutput(f+".csv",fileManager.formatCsvOutput(pathHistory.back()));}
-                break;
-            }
-            case 11: {
-                if(pathHistory.empty()){cout<<"No paths recommended yet.\n";}else{string f;cout<<"Base name for files: ";cin>>f;stringstream t,c;for(const auto&p:pathHistory){t<<fileManager.formatTxtOutput(p);c<<fileManager.formatCsvOutput(p);}fileManager.saveOutput(f+".txt",t.str());fileManager.saveOutput(f+".csv",c.str());}
-                break;
-            }
-            case 12: {
-                 fileManager.saveLocationsToCSV(transportationSystem, "input_locations_saved.csv");
-                 fileManager.saveRoutesToCSV(transportationSystem, "input_routes_saved.csv");
-                 break;
-            }
-            case 13: {
-                string t;cout<<"Delete input or output file? (input/output): ";cin>>t;fileManager.listFiles(t);cout<<"Filename to delete: ";string fn;cin>>fn;fileManager.deleteFile(fn);
-                break;
-            }
-            case 0: cout << "Exiting program. Goodbye!" << endl; break;
-            default: cout << "Invalid choice. Please try again." << endl; break;
         }
-    }
 
     } catch (const exception& e) {
         cerr << "A critical error occurred: " << e.what() << endl;
