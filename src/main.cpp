@@ -9,7 +9,7 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
-
+using namespace std;
 // =================================================================================
 // 1. FORWARD DECLARATIONS & CORE DATA TYPES
 // =================================================================================
@@ -31,7 +31,7 @@ enum class TransportationClass { ECONOMY, EXECUTIVE, BUSINESS, FIRST_CLASS };
  * @brief Encapsulates all user choices into a single object. This is the OUTPUT of the Decision Tree.
  */
 struct UserPreferences {
-    std::string profileName; // e.g., "Budget Traveler", "Business Professional"
+    string profileName; // e.g., "Budget Traveler", "Business Professional"
     double timeWeight = 1.0;
     double costWeight = 1.0;
     double distanceWeight = 1.0;
@@ -48,15 +48,15 @@ struct UserPreferences {
  * @brief Represents a node in the Decision Tree. It's either a question or a final decision (a leaf).
  */
 struct TreeNode {
-    std::string question;
+    string question;
     bool isLeaf = false;
     UserPreferences preferences; // Only used if it's a leaf node
 
     // Maps an answer (e.g., "1", "2") to the next node in the tree.
     // Using unique_ptr for automatic memory management of child nodes.
-    std::map<std::string, std::unique_ptr<TreeNode>> children;
+    map<string, unique_ptr<TreeNode>> children;
 
-    TreeNode(std::string q) : question(q) {} // Constructor for question nodes
+    TreeNode(string q) : question(q) {} // Constructor for question nodes
     TreeNode(UserPreferences prefs) : isLeaf(true), preferences(prefs) {} // Constructor for leaf nodes
 };
 
@@ -66,23 +66,23 @@ struct TreeNode {
  */
 class DecisionTree {
 private:
-    std::unique_ptr<TreeNode> root;
+    unique_ptr<TreeNode> root;
 
     // A helper function for visualizing the tree recursively
     void printTree(const TreeNode* node, int indent) const {
         if (!node) return;
 
         // Print indentation
-        for (int i = 0; i < indent; ++i) std::cout << "  ";
+        for (int i = 0; i < indent; ++i) cout << "  ";
 
         if (node->isLeaf) {
-            std::cout << "-> LEAF: " << node->preferences.profileName << " (Time:"
-                      << node->preferences.timeWeight << ", Cost:" << node->preferences.costWeight << ")" << std::endl;
+            cout << "-> LEAF: " << node->preferences.profileName << " (Time:"
+                      << node->preferences.timeWeight << ", Cost:" << node->preferences.costWeight << ")" << endl;
         } else {
-            std::cout << "Q: " << node->question << std::endl;
+            cout << "Q: " << node->question << endl;
             for (const auto& pair : node->children) {
-                for (int i = 0; i < indent; ++i) std::cout << "  ";
-                std::cout << "  [" << pair.first << "] " << std::endl;
+                for (int i = 0; i < indent; ++i) cout << "  ";
+                cout << "  [" << pair.first << "] " << endl;
                 printTree(pair.second.get(), indent + 2);
             }
         }
@@ -104,27 +104,27 @@ public:
         auto scenicExplorer = UserPreferences{"Scenic Explorer", 2.0, 4.0, 10.0};
 
         // Create the tree structure from the bottom up
-        root = std::make_unique<TreeNode>("What is your main priority for this trip?");
+        root = make_unique<TreeNode>("What is your main priority for this trip?");
         
         // Branch 1: Time is most important
-        auto timeNode = std::make_unique<TreeNode>("You prioritize speed. Is budget a major concern?");
-        timeNode->children["1. Yes, budget is tight."] = std::make_unique<TreeNode>(balancedTraveler);
-        timeNode->children["2. No, speed is everything."] = std::make_unique<TreeNode>(businessTraveler);
+        auto timeNode = make_unique<TreeNode>("You prioritize speed. Is budget a major concern?");
+        timeNode->children["1. Yes, budget is tight."] = make_unique<TreeNode>(balancedTraveler);
+        timeNode->children["2. No, speed is everything."] = make_unique<TreeNode>(businessTraveler);
 
         // Branch 2: Cost is most important
-        auto costNode = std::make_unique<TreeNode>("You prioritize low cost. Are you completely flexible on time?");
-        costNode->children["1. Yes, I have plenty of time."] = std::make_unique<TreeNode>(budgetTraveler);
-        costNode->children["2. No, I still need a reasonable travel time."] = std::make_unique<TreeNode>(balancedTraveler);
+        auto costNode = make_unique<TreeNode>("You prioritize low cost. Are you completely flexible on time?");
+        costNode->children["1. Yes, I have plenty of time."] = make_unique<TreeNode>(budgetTraveler);
+        costNode->children["2. No, I still need a reasonable travel time."] = make_unique<TreeNode>(balancedTraveler);
         
         // Branch 3: Scenery/Distance is most important
-        auto distanceNode = std::make_unique<TreeNode>("You want to explore. Do you prefer a direct route or one with more stops?");
-        distanceNode->children["1. A direct, scenic route."] = std::make_unique<TreeNode>(scenicExplorer);
-        distanceNode->children["2. A balanced approach is fine."] = std::make_unique<TreeNode>(balancedTraveler);
+        auto distanceNode = make_unique<TreeNode>("You want to explore. Do you prefer a direct route or one with more stops?");
+        distanceNode->children["1. A direct, scenic route."] = make_unique<TreeNode>(scenicExplorer);
+        distanceNode->children["2. A balanced approach is fine."] = make_unique<TreeNode>(balancedTraveler);
 
         // Connect branches to the root
-        root->children["1. Fastest time"] = std::move(timeNode);
-        root->children["2. Lowest cost"] = std::move(costNode);
-        root->children["3. Shortest distance / Most scenic"] = std::move(distanceNode);
+        root->children["1. Fastest time"] = move(timeNode);
+        root->children["2. Lowest cost"] = move(costNode);
+        root->children["3. Shortest distance / Most scenic"] = move(distanceNode);
     }
 
     /**
@@ -132,28 +132,28 @@ public:
      * @return The UserPreferences object determined by the user's answers.
      */
     UserPreferences run() const {
-        std::cout << "\n--- Let's Find Your Travel Style! ---\n";
+        cout << "\n--- Let's Find Your Travel Style! ---\n";
         TreeNode* currentNode = root.get();
-        std::string answer;
+        string answer;
 
         while (!currentNode->isLeaf) {
-            std::cout << "\nQ: " << currentNode->question << std::endl;
+            cout << "\nQ: " << currentNode->question << endl;
             for (const auto& pair : currentNode->children) {
-                std::cout << "   " << pair.first << std::endl;
+                cout << "   " << pair.first << endl;
             }
-            std::cout << "Your choice: ";
-            std::cin >> answer;
+            cout << "Your choice: ";
+            cin >> answer;
 
             if (currentNode->children.count(answer)) {
                 currentNode = currentNode->children.at(answer).get();
             } else {
-                std::cout << "Invalid choice, please try again." << std::endl;
+                cout << "Invalid choice, please try again." << endl;
             }
         }
 
-        std::cout << "\n---------------------------------------\n";
-        std::cout << "Great! We've determined your profile is: " << currentNode->preferences.profileName << std::endl;
-        std::cout << "---------------------------------------\n";
+        cout << "\n---------------------------------------\n";
+        cout << "Great! We've determined your profile is: " << currentNode->preferences.profileName << endl;
+        cout << "---------------------------------------\n";
         return currentNode->preferences;
     }
 
@@ -161,9 +161,9 @@ public:
      * @brief Prints a textual representation of the decision tree structure.
      */
     void visualize() const {
-        std::cout << "\n--- Decision Tree Structure ---\n";
+        cout << "\n--- Decision Tree Structure ---\n";
         printTree(root.get(), 0);
-        std::cout << "-----------------------------\n";
+        cout << "-----------------------------\n";
     }
 };
 
@@ -173,9 +173,9 @@ public:
 // =================================================================================
 
 class Location { /* ... same as before ... */
-private: int id; std::string name; double latitude; double longitude;
-public: Location(int id=0, std::string n="", double lat=0.0, double lon=0.0):id(id),name(n),latitude(lat),longitude(lon){}
-int getId() const {return id;} std::string getName() const {return name;}
+private: int id; string name; double latitude; double longitude;
+public: Location(int id=0, string n="", double lat=0.0, double lon=0.0):id(id),name(n),latitude(lat),longitude(lon){}
+int getId() const {return id;} string getName() const {return name;}
 };
 
 class Route { /* ... same as before ... */
@@ -194,19 +194,19 @@ double calculateWeight(const UserPreferences& prefs) const override {
 };
 
 class Graph { /* ... same as before, simplified for clarity ... */
-private: std::map<int, Location> locations; std::map<int, std::vector<std::unique_ptr<Route>>> adjList; int nextId=1;
+private: map<int, Location> locations; map<int, vector<unique_ptr<Route>>> adjList; int nextId=1;
 public:
-    void addLocation(const std::string& n, double lat, double lon){ int id=nextId++; locations[id]=Location(id,n,lat,lon); adjList[id]={}; }
+    void addLocation(const string& n, double lat, double lon){ int id=nextId++; locations[id]=Location(id,n,lat,lon); adjList[id]={}; }
     void addRoute(int sId, int dId, double d, double t, double c){
         if(!locations.count(sId) || !locations.count(dId)) return;
-        adjList.at(sId).push_back(std::make_unique<ConcreteRoute>(&locations.at(sId),&locations.at(dId),d,t,c));
+        adjList.at(sId).push_back(make_unique<ConcreteRoute>(&locations.at(sId),&locations.at(dId),d,t,c));
     }
     void findShortestPath(int startId, int goalId, const UserPreferences& prefs) const {
-        std::cout << "\n======================================================\n";
-        std::cout << "Finding route for profile: " << prefs.profileName << "\n";
-        std::cout << "Searching path from " << locations.at(startId).getName() << " to " << locations.at(goalId).getName() << "...\n";
-        std::cout << "A* algorithm would run here using the calculated weights.\n";
-        std::cout << "======================================================\n\n";
+        cout << "\n======================================================\n";
+        cout << "Finding route for profile: " << prefs.profileName << "\n";
+        cout << "Searching path from " << locations.at(startId).getName() << " to " << locations.at(goalId).getName() << "...\n";
+        cout << "A* algorithm would run here using the calculated weights.\n";
+        cout << "======================================================\n\n";
     }
 };
 
@@ -239,8 +239,8 @@ int main() {
         // The `userPrefs` object is the bridge between the two data structures.
         transportationSystem.findShortestPath(1, 3, userPrefs); // Find path from Jakarta to Surabaya
 
-    } catch (const std::exception& e) {
-        std::cerr << "An error occurred: " << e.what() << std::endl;
+    } catch (const exception& e) {
+        cerr << "An error occurred: " << e.what() << endl;
         return 1;
     }
 
