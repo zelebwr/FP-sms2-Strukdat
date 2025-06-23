@@ -278,7 +278,14 @@ private:
     }
     
 public:
-void addLocation(const string& name, double lat, double lon) {
+    // This tells the compiler that the Graph object cannot be copied.
+    Graph(const Graph&) = delete;
+    Graph& operator=(const Graph&) = delete;
+
+    // We must define the default constructor since we deleted the copy constructor
+    Graph() = default;
+
+    void addLocation(const string& name, double lat, double lon) {
         int id = nextId++;
         locations[id] = Location(id, name, lat, lon);
         adjList[id] = {};
