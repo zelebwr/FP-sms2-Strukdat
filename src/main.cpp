@@ -690,12 +690,13 @@ void cli_printMenu() { /* ... same as before ... */
          << Color::GREEN << "  7. " << Color::WHITE << "Delete Route\n"
          << Color::WHITE << "\nPathfinding & Saving:\n" << Color::RESET
          << Color::GREEN << "  8. " << Color::WHITE << "Recommend a Path\n"
-         << Color::GREEN << "  9. " << Color::WHITE << "Show Recommended Path History\n"
-         << Color::GREEN << "  10. " << Color::WHITE << "Save LAST Recommended Path\n"
-         << Color::GREEN << "  11. " << Color::WHITE << "Save ALL Recommended Paths\n"
+         << Color::GREEN << "  9. " << Color::WHITE << "Check Preferences\n"
+         << Color::GREEN << "  10. " << Color::WHITE << "Show Recommended Path History\n"
+         << Color::GREEN << "  11. " << Color::WHITE << "Save LAST Recommended Path\n"
+         << Color::GREEN << "  12. " << Color::WHITE << "Save ALL Recommended Paths\n"
          << Color::WHITE << "\nFile Management:\n" << Color::RESET
-         << Color::GREEN << "  12. " << Color::WHITE << "Save Current Graph Data to File\n"
-         << Color::GREEN << "  13. " << Color::WHITE << "Delete a File\n"
+         << Color::GREEN << "  13. " << Color::WHITE << "Save Current Graph Data to File\n"
+         << Color::GREEN << "  14. " << Color::WHITE << "Delete a File\n"
          << Color::RED << "\n  0. Exit\n" << Color::RESET
          << Color::YELLOW << "=========================================\n" << Color::RESET
          << Color::MAGENTA << "Enter your choice: " << Color::RESET;
@@ -750,8 +751,12 @@ int main() {
                     }
                     break;
                 }
-                case 9: cli_showRecommendedPaths(pathHistory, fileManager); break;
-                case 10: {
+                case 9: {
+                    preferenceFinder.visualize();
+                    break;
+                }
+                case 10: cli_showRecommendedPaths(pathHistory, fileManager); break;
+                case 11: {
                     if (pathHistory.empty()) {
                         cout << Color::YELLOW << "No path recommended yet.\n" << Color::RESET;
                     } else {
@@ -761,7 +766,7 @@ int main() {
                     }
                     break;
                 }
-                case 11: {
+                case 12: {
                     if (pathHistory.empty()) {
                         cout << Color::YELLOW << "No paths recommended yet.\n" << Color::RESET;
                     } else {
@@ -777,14 +782,15 @@ int main() {
                     }
                     break;
                 }
-                case 12: {
+                case 13: {
                     fileManager.saveLocationsToCSV(transportationSystem, "input_locations_saved.csv");
                     fileManager.saveRoutesToCSV(transportationSystem, "input_routes_saved.csv");
                     break;
                 }
-                case 13:
+                case 14: {
                     fileManager.deleteFile();
                     break;
+                }
                 case 0:
                     cout << Color::CYAN << "Exiting program. Goodbye!" << Color::RESET << endl;
                     break;
