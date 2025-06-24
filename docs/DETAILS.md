@@ -24,7 +24,7 @@ Each route, corresponding with the transportation and its class, will have uniqu
 3. Travel Cost
 
 ## 4. Program Algorithm 
-The concept of the program is that it uses weighted graph that depends on each route's attributes determined by the **adjacency matrix** using __A* Algorithm__.
+The concept of the program is that it uses weighted graph that depends on each route's attributes determined by the **adjacency list** using __A* Algorithm__.
 
 ## 5. User Preference
 The program can dynamically determine the "optimal path" depending on the user's preference, which are: 
@@ -33,13 +33,3 @@ The program can dynamically determine the "optimal path" depending on the user's
 3. Amount of Transit
 4. Transportation Type
 5. Transportation Class
-
-user A: line 30 - 33: 
-hai 
-ini 
-perubahan baru 
-
-user B: line 30 - 33: 
-ini perubahan
-ku 
-yang user B

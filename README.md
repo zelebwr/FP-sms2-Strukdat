@@ -11,15 +11,12 @@ Hafiz Ramadhan | 5027241096
 Erlinda Annisa Zahra Kusuma | 5027241108
 
 ## Division of Tasks
-1. Database Implementation: 
-2. Algorithm Implementation (2): 
-3. CRUD Template: 
-4. OOP Structure: 
-5. User Preference Decisioning (2): 
-6. CLI Output/Interface (2): 
-7. Additional Data Structure (2): 
+1. Database Implementation: Hafiz
+2. Algorithm Implementation : Hafiz & Zelig 
+3. CRUD Template: Erlinda
+4. OOP Structure: Kaisar
+5. User Preference Decisioning: Akbar 
+6. CLI Output/Interface: Mey 
+7. Additional Data Structure: Zelig
 
-## Coba aja
-
-halo ini perubahan gak masukakl
 
